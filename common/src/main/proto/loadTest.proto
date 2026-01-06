@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package com.project.common.proto;
+
+option java_multiple_files = true;
+option java_package = "com.project.common.proto";
+option java_outer_classname = "LoadTestProto";
+
+// Controller -> Agent 명령 서비스
+service AgentService {
+  // 테스트 시작 명령
+  rpc StartTest (TestConfig) returns (Ack);
+  // 테스트 중단
+  rpc StopTest (TestId) returns (Ack);
+  // 헬스 체크
+  rpc Ping (Empty) returns (Pong);
+}
+
+// Agent -> Controller 보고 서비스
+service ReportService {
+  // 실시간 통계 전송
+  rpc StreamStats (stream TestStat) returns (Ack);
+}
+
+message TestConfig {
+  string testId = 1;
+  string targetUrl = 2;
+  int32 virtualUsers = 3; // 동시 접속자 수
+  int32 durationSeconds = 4; // 테스트 지속 시간
+  string httpMethod = 5;
+}
+
+message TestStat {
+  string testId = 1;
+  int64 timestamp = 2;
+  int32 activeUsers = 3;
+  int32 requestsPerSecond = 4; // TPS
+  double avgLatencyMs = 5; // 평균 응답 속도
+  int32 errorCount = 6;
+}
+
+message TestId { string id = 1; }
+message Ack { bool success = 1; string message = 2; }
+message Empty {}
+message Pong { bool alive = 1; }
