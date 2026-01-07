@@ -23,10 +23,6 @@ dependencies {
 	implementation("io.grpc:grpc-protobuf:1.77.1")
 	implementation("io.grpc:grpc-stub:1.77.1")
 	implementation("io.grpc:grpc-kotlin-stub:1.4.1")
-	implementation("net.devh:grpc-spring-boot-starter:3.1.0.RELEASE")
-
-	// HTTP Client
-	implementation("org.apache.httpcomponents.client5:httpclient5:5.3")
 
 	// Test
 	testImplementation("org.springframework.boot:spring-boot-starter-test")

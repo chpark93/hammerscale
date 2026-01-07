@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: hammerscale-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: hammerscale
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: 1234
+    volumes:
+      - ./db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d load_tester"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hammerscale-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: hammerscale-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hammerscale-network
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: hammerscale-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: root
+      DOCKER_INFLUXDB_INIT_PASSWORD: password1234
+      DOCKER_INFLUXDB_INIT_ORG: hammerscale
+      DOCKER_INFLUXDB_INIT_BUCKET: metrics
+    volumes:
+      - ./influxdb-data:/var/lib/influxdb2
+    networks:
+      - hammerscale-network
+
+networks:
+  hammerscale-network:
+    driver: bridge
+
+volumes:
+  db-data:
+

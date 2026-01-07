@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
 	id("org.springframework.boot") version "3.5.7"
 }
@@ -18,6 +20,18 @@ dependencies {
 	// Kotlin Coroutines
 	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
+	// Exposed ORM
+	implementation("org.jetbrains.exposed:exposed-core:0.50.0")
+	implementation("org.jetbrains.exposed:exposed-jdbc:0.50.0")
+	implementation("org.jetbrains.exposed:exposed-java-time:0.50.0")
+	implementation("org.jetbrains.exposed:exposed-spring-boot-starter:0.50.0")
+	
+	// PostgreSQL Driver
+	implementation("org.postgresql:postgresql:42.7.3")
+
+	// InfluxDB Client
+	implementation("com.influxdb:influxdb-client-kotlin:7.2.0")
+
 	// gRPC
 	implementation("io.grpc:grpc-netty-shaded:1.77.1")
 	implementation("io.grpc:grpc-protobuf:1.77.1")
@@ -31,3 +45,7 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+val compileKotlin: KotlinCompile by tasks
+compileKotlin.compilerOptions {
+    freeCompilerArgs.set(listOf("-Xannotation-default-target=param-property"))
+}

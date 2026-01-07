@@ -26,6 +26,14 @@ class GrpcServerRunner(
             .also { it.start() }
         
         logger.info("gRPC Agent Server started on port 50051")
+        
+        Thread {
+            try {
+                server?.awaitTermination()
+            } catch (e: InterruptedException) {
+                logger.warn("gRPC server awaitTermination interrupted", e)
+            }
+        }.start()
     }
 
     override fun destroy() {

@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hammerscale
+    username: root
+    password: 1234
+    driver-class-name: org.postgresql.Driver
+
+server:
+  port: 8080
+
+grpc:
+  server:
+    port: 9090  # Agent의 StatsReporter가 연결할 포트
+
+influxdb:
+  url: http://localhost:8086
+  username: root
+  password: password1234
+  org: hammerscale
+  bucket: metrics
+  token: ""  # Token 기반 인증 사용 시 설정 (비어있으면 username/password 사용)
+

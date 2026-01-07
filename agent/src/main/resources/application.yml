@@ -7,4 +7,11 @@ spring:
   threads:
     virtual:
       enabled: true
+  main:
+    web-application-type: none
+
+grpc:
+  controller:
+    host: localhost
+    port: 9090  # Controller의 gRPC 서버 포트
 
