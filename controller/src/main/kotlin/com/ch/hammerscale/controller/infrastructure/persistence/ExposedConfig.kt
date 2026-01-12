@@ -17,7 +17,7 @@ class ExposedConfig : ApplicationRunner {
         logger.info("[Exposed] Database 테이블 생성 시작")
 
         transaction {
-            SchemaUtils.create(TestPlans)
+            SchemaUtils.createMissingTablesAndColumns(TestPlans)
         }
 
         logger.info("[Exposed] TestPlans 테이블 생성 완료")

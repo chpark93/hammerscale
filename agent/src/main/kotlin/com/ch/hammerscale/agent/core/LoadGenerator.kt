@@ -33,6 +33,7 @@ class LoadGenerator(
     private var monitoringThread: Thread? = null
     private var statsCollector: WindowedStatsCollector? = null
     private var statsReporter: StatsReporter? = null
+
     @Volatile private var isRunning = false
     @Volatile private var stopRequested = false
 
@@ -44,9 +45,15 @@ class LoadGenerator(
             return
         }
 
+        val rampUpInfo = if (config.rampUpSeconds > 0) {
+            "Ramp-up: ${config.rampUpSeconds}s"
+        } else {
+            "Ramp-up: None (instant)"
+        }
+        
         logger.info(
             "[LoadGenerator] 부하 테스트 시작 - ID: ${config.testId}, URL: ${config.targetUrl}, " +
-            "Users: ${config.virtualUsers}, Duration: ${config.durationSeconds}s, Method: ${config.httpMethod}"
+            "Users: ${config.virtualUsers}, Duration: ${config.durationSeconds}s, Method: ${config.httpMethod}, $rampUpInfo"
         )
 
         // 통계 집계기 생성
@@ -98,20 +105,45 @@ class LoadGenerator(
         // ExecutorService 생성
         executorService = Executors.newVirtualThreadPerTaskExecutor()
 
-        // 각 Virtual User에 대해 작업 제출
+        // 각 Virtual User에 대해 작업 제출 (Ramp-up 적용)
         val startTime = System.currentTimeMillis()
         val endTime = startTime + (config.durationSeconds * 1000L)
 
-        repeat(config.virtualUsers) { userIndex ->
-            executorService?.submit {
-                runLoadTest(config, endTime, userIndex)
+        if (config.rampUpSeconds > 0) {
+            // Ramp-up: 점진적으로 Virtual User 시작
+            val delayBetweenUsers = (config.rampUpSeconds * 1000.0) / config.virtualUsers
+            
+            Thread {
+                repeat(config.virtualUsers) { userIndex ->
+                    if (!isRunning) return@Thread
+                    
+                    executorService?.submit {
+                        runLoadTest(config, endTime, userIndex)
+                    }
+                    
+                    // 다음 사용자 시작 전 대기
+                    if (userIndex < config.virtualUsers - 1) {
+                        Thread.sleep(delayBetweenUsers.toLong())
+                    }
+                }
+                
+                logger.info("[LoadGenerator] Ramp-up 완료 - ${config.virtualUsers}개의 Virtual Thread가 모두 시작되었습니다.")
+            }.start()
+            
+            logger.info("[LoadGenerator] Ramp-up 시작 - ${config.virtualUsers}명을 ${config.rampUpSeconds}초에 걸쳐 시작합니다.")
+        } else {
+            // 즉시 시작 (기존 방식)
+            repeat(config.virtualUsers) { userIndex ->
+                executorService?.submit {
+                    runLoadTest(config, endTime, userIndex)
+                }
             }
+            
+            logger.info("[LoadGenerator] ${config.virtualUsers}개의 Virtual Thread가 즉시 시작되었습니다.")
         }
 
         // 모니터링 스레드 시작
         startMonitoring(config.testId, startTime, config.durationSeconds)
-
-        logger.info("[LoadGenerator] ${config.virtualUsers}개의 Virtual Thread가 시작되었습니다.")
     }
 
     private fun runLoadTest(
@@ -119,7 +151,8 @@ class LoadGenerator(
         endTime: Long,
         userIndex: Int
     ) {
-        val uri = URI.create(config.targetUrl)
+        val finalUrl = buildUrlWithQueryParams(config.targetUrl, config.queryParamsMap)
+        val uri = URI.create(finalUrl)
         val httpMethod = config.httpMethod.uppercase()
         var consecutiveErrors = 0
         val maxConsecutiveErrors = 10  // 연속 10번 에러 시 해당 스레드 중단
@@ -130,28 +163,11 @@ class LoadGenerator(
                 val startRequestTime = System.currentTimeMillis()
                 
                 try {
-                    val request = when (httpMethod) {
-                        "GET" -> HttpRequest.newBuilder()
-                            .uri(uri)
-                            .GET()
-                            .timeout(Duration.ofSeconds(10))
-                            .build()
-
-                        "POST" -> HttpRequest.newBuilder()
-                            .uri(uri)
-                            .POST(HttpRequest.BodyPublishers.ofString(""))
-                            .timeout(Duration.ofSeconds(10))
-                            .build()
-
-                        else -> {
-                            logger.warn("Unsupported HTTP method: $httpMethod, using GET")
-                            HttpRequest.newBuilder()
-                                .uri(uri)
-                                .GET()
-                                .timeout(Duration.ofSeconds(10))
-                                .build()
-                        }
-                    }
+                    val request = buildHttpRequest(
+                        uri = uri,
+                        httpMethod = httpMethod,
+                        config = config
+                    )
 
                     val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
                     val latency = System.currentTimeMillis() - startRequestTime
@@ -181,7 +197,10 @@ class LoadGenerator(
                         }
                     }
                     
-                    statsCollector?.record(latency, isSuccess)
+                    statsCollector?.record(
+                        latencyMs = latency,
+                        isSuccess = isSuccess
+                    )
 
                     Thread.sleep(10)
 
@@ -339,6 +358,61 @@ class LoadGenerator(
             requestCount = requestCount.sum(),
             errorCount = errorCount.sum()
         )
+    }
+
+    private fun buildUrlWithQueryParams(
+        baseUrl: String,
+        queryParams: Map<String, String>
+    ): String {
+        if (queryParams.isEmpty()) {
+            return baseUrl
+        }
+
+        val separator = if (baseUrl.contains('?')) '&' else '?'
+        val queryString = queryParams.entries.joinToString("&") { (key, value) ->
+            "${java.net.URLEncoder.encode(key, "UTF-8")}=${java.net.URLEncoder.encode(value, "UTF-8")}"
+        }
+
+        return "$baseUrl$separator$queryString"
+    }
+
+    private fun buildHttpRequest(
+        uri: URI,
+        httpMethod: String,
+        config: TestConfig
+    ): HttpRequest {
+        val builder = HttpRequest.newBuilder()
+            .uri(uri)
+            .timeout(Duration.ofSeconds(10))
+
+        config.headersMap.forEach { (key, value) ->
+            builder.header(key, value)
+        }
+
+        when (httpMethod) {
+            "GET" -> builder.GET()
+            "POST" -> {
+                val body = config.requestBody.takeIf { it.isNotBlank() } ?: ""
+                builder.POST(HttpRequest.BodyPublishers.ofString(body))
+            }
+            "PUT" -> {
+                val body = config.requestBody.takeIf { it.isNotBlank() } ?: ""
+                builder.PUT(HttpRequest.BodyPublishers.ofString(body))
+            }
+            "PATCH" -> {
+                val body = config.requestBody.takeIf { it.isNotBlank() } ?: ""
+                builder.method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+            }
+            "DELETE" -> {
+                builder.DELETE()
+            }
+            else -> {
+                logger.warn("Unsupported HTTP method: $httpMethod, using GET")
+                builder.GET()
+            }
+        }
+
+        return builder.build()
     }
 }
 

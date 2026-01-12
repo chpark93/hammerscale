@@ -1,6 +1,7 @@
 package com.ch.hammerscale.controller.infrastructure.grpc
 
 import com.ch.hammerscale.controller.domain.port.out.TestMetricRepository
+import com.ch.hammerscale.controller.domain.port.out.TestPlanRepository
 import com.project.common.proto.Ack
 import com.project.common.proto.ReportServiceGrpcKt
 import com.project.common.proto.TestStat
@@ -12,7 +13,8 @@ import org.slf4j.LoggerFactory
 
 @GrpcService
 class ReportServiceGrpcImpl(
-    private val testMetricRepository: TestMetricRepository
+    private val testMetricRepository: TestMetricRepository,
+    private val testPlanRepository: TestPlanRepository
 ) : ReportServiceGrpcKt.ReportServiceCoroutineImplBase() {
 
     private val logger = LoggerFactory.getLogger(ReportServiceGrpcImpl::class.java)
@@ -26,6 +28,8 @@ class ReportServiceGrpcImpl(
     ): Ack {
         logger.info("[Report] 통계 스트림 수신 시작")
 
+        var testId: String? = null
+
         try {
             var totalProcessed = 0
             var totalSaved = 0
@@ -34,15 +38,21 @@ class ReportServiceGrpcImpl(
             requests
                 .buffer()
                 .catch { e ->
-                    // 스트림 레벨 에러 처리 - 스트림이 끊기지 않도록
                     logger.error("[Report] 스트림 처리 중 오류 발생: ${e.message}", e)
                     throw e
                 }
                 .collect { stat ->
+                    if (testId == null) {
+                        testId = stat.testId
+                    }
+
                     logger.info(
                         "[Report] TestID: ${stat.testId} | " +
                         "TPS: ${stat.requestsPerSecond} | " +
-                        "Avg Latency: ${stat.avgLatencyMs}ms | " +
+                        "Latency: Avg=${String.format("%.1f", stat.avgLatencyMs)}ms " +
+                        "p50=${String.format("%.1f", stat.p50LatencyMs)}ms " +
+                        "p95=${String.format("%.1f", stat.p95LatencyMs)}ms " +
+                        "p99=${String.format("%.1f", stat.p99LatencyMs)}ms | " +
                         "Errors: ${stat.errorCount} | " +
                         "Active Users: ${stat.activeUsers}"
                     )
@@ -58,7 +68,6 @@ class ReportServiceGrpcImpl(
                     totalProcessed++
                     batch.add(stat)
 
-                    // 배치 크기에 도달 -> InfluxDB에 저장
                     if (batch.size >= BATCH_SIZE) {
                         try {
                             testMetricRepository.saveMetrics(batch.toList())
@@ -72,7 +81,9 @@ class ReportServiceGrpcImpl(
                                 "Batch Size: ${batch.size}, Error: ${e.message}",
                                 e
                             )
-                            batch.clear() // 실패해도 배치는 초기화
+
+                            // 실패해도 배치는 초기화
+                            batch.clear()
                         }
                     }
                 }
@@ -97,6 +108,12 @@ class ReportServiceGrpcImpl(
                 "Total Processed: $totalProcessed, Total Saved: $totalSaved"
             )
 
+            if (testId != null) {
+                updateTestStatusToFinished(
+                    testId = testId
+                )
+            }
+
             return Ack.newBuilder()
                 .setSuccess(true)
                 .setMessage("Statistics stream processed successfully. Processed: $totalProcessed, Saved: $totalSaved")
@@ -109,6 +126,34 @@ class ReportServiceGrpcImpl(
                 .setSuccess(false)
                 .setMessage("Failed to process statistics stream: ${e.message}")
                 .build()
+        }
+    }
+
+    private fun updateTestStatusToFinished(
+        testId: String
+    ) {
+        if (testId.isBlank()) {
+            logger.warn("[Report] TestID가 비어있어 상태 업데이트를 건너뜁니다.")
+            return
+        }
+
+        try {
+            val testPlan = testPlanRepository.findById(
+                id = testId
+            )
+
+            if (testPlan != null) {
+                val finishedPlan = testPlan.stop()
+                testPlanRepository.save(
+                    testPlan = finishedPlan
+                )
+
+                logger.info("[Report] TestPlan 상태를 FINISHED로 업데이트했습니다 - ID: $testId")
+            } else {
+                logger.warn("[Report] TestPlan을 찾을 수 없습니다 - ID: $testId")
+            }
+        } catch (e: Exception) {
+            logger.error("[Report] TestPlan 상태 업데이트 실패 - ID: $testId", e)
         }
     }
 }

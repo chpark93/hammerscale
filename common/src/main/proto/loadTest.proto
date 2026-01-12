@@ -6,7 +6,7 @@ option java_multiple_files = true;
 option java_package = "com.project.common.proto";
 option java_outer_classname = "LoadTestProto";
 
-// Controller -> Agent 명령 서비스
+// Controller -> Agent 명령
 service AgentService {
   // 테스트 시작 명령
   rpc StartTest (TestConfig) returns (Ack);
@@ -16,7 +16,7 @@ service AgentService {
   rpc Ping (Empty) returns (Pong);
 }
 
-// Agent -> Controller 보고 서비스
+// Agent -> Controller 보고
 service ReportService {
   // 실시간 통계 전송
   rpc StreamStats (stream TestStat) returns (Ack);
@@ -28,6 +28,10 @@ message TestConfig {
   int32 virtualUsers = 3; // 동시 접속자 수
   int32 durationSeconds = 4; // 테스트 지속 시간
   string httpMethod = 5;
+  map<string, string> headers = 6; // HTTP 헤더
+  map<string, string> queryParams = 7; // Query Parameters
+  string requestBody = 8; // Request Body (JSON 등)
+  int32 rampUpSeconds = 9; // Ramp-up 시간 (0 = 즉시 시작)
 }
 
 message TestStat {
@@ -36,7 +40,10 @@ message TestStat {
   int32 activeUsers = 3;
   int32 requestsPerSecond = 4; // TPS
   double avgLatencyMs = 5; // 평균 응답 속도
-  int32 errorCount = 6;
+  double p50LatencyMs = 6; // 50th percentile (median)
+  double p95LatencyMs = 7; // 95th percentile
+  double p99LatencyMs = 8; // 99th percentile
+  int32 errorCount = 9;
 }
 
 message TestId { string id = 1; }

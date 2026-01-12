@@ -18,6 +18,9 @@ dependencies {
 	// Kotlin Coroutines
 	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
+	// HdrHistogram
+	implementation("org.hdrhistogram:HdrHistogram:2.2.2")
+
 	// gRPC
 	implementation("io.grpc:grpc-netty-shaded:1.77.1")
 	implementation("io.grpc:grpc-protobuf:1.77.1")

@@ -12,4 +12,7 @@ object TestPlans : Table("test_plans") {
     val method = varchar("method", 10)
     val status = varchar("status", 20)
     val createdAt = timestamp("created_at")
+    val headers = text("headers").nullable() // JSON 문자열
+    val queryParams = text("query_params").nullable() // JSON 문자열
+    val requestBody = text("request_body").nullable()
 }
