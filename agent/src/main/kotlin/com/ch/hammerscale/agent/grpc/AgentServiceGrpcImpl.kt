@@ -32,7 +32,6 @@ class AgentServiceGrpcImpl(
             }
         }
 
-        // 즉시 Ack 응답 반환
         return Ack.newBuilder()
             .setSuccess(true)
             .setMessage("Test start request accepted. Load test is running in background.")

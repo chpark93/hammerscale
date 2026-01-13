@@ -5,6 +5,7 @@ import com.project.common.proto.TestConfig
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -29,7 +30,6 @@ class LoadGenerator(
     private val requestCount = LongAdder()
     private val errorCount = LongAdder()
     private val activeUserCount = LongAdder() // 현재 활성 Virtual User 수 추적
-
     private var executorService: ExecutorService? = null
     private var monitoringThread: Thread? = null
     private var statsCollector: WindowedStatsCollector? = null
@@ -46,6 +46,23 @@ class LoadGenerator(
             return
         }
 
+        when (val testType = config.testType.uppercase()) {
+            "LOAD" -> startLoadTest(
+                config = config
+            )
+            "STRESS" -> startStressTest(
+                config = config
+            )
+            else -> {
+                logger.error("[LoadGenerator] Unknown test type: $testType")
+                return
+            }
+        }
+    }
+
+    private fun startLoadTest(
+        config: TestConfig
+    ) {
         val rampUpInfo = if (config.rampUpSeconds > 0) {
             "Ramp-up: ${config.rampUpSeconds}s"
         } else {
@@ -53,18 +70,19 @@ class LoadGenerator(
         }
         
         logger.info(
-            "[LoadGenerator] 부하 테스트 시작 - ID: ${config.testId}, URL: ${config.targetUrl}, " +
+            "[LoadGenerator] LOAD 테스트 시작 - ID: ${config.testId}, URL: ${config.targetUrl}, " +
             "Users: ${config.virtualUsers}, Duration: ${config.durationSeconds}s, Method: ${config.httpMethod}, $rampUpInfo"
         )
 
         // 통계 집계기 생성
-        statsCollector = WindowedStatsCollector(config.testId)
+        statsCollector = WindowedStatsCollector(
+            testId = config.testId
+        )
 
         // 통계 리포터 생성 및 시작
         stopRequested = false
 
         // [부하 / 장애] 상황에서의 보호 로직
-        // - 1초 윈도우 평균 레이턴시가 임계치를 연속으로 넘으면 자동 중단
         val latencyStopThresholdMs = 2_000.0
         val latencyStopConsecutiveWindows = 3
         var highLatencyWindows = 0
@@ -72,11 +90,9 @@ class LoadGenerator(
         statsReporter = StatsReporter(
             collector = statsCollector!!,
             reportStub = reportServiceStub,
-            getActiveUsers = { activeUserCount.sum().toInt() } // 실시간 활성 사용자 수 전달
+            getActiveUsers = { activeUserCount.sum().toInt() }
         ) { stat ->
             if (stopRequested || !isRunning) return@StatsReporter
-
-            // 통계가 없으면 판단하지 않음
             if (stat.requestsPerSecond <= 0) return@StatsReporter
 
             if (stat.avgLatencyMs >= latencyStopThresholdMs) {
@@ -87,7 +103,6 @@ class LoadGenerator(
 
             if (highLatencyWindows >= latencyStopConsecutiveWindows && !stopRequested) {
                 stopRequested = true
-                // StatsReporter 코루틴 안에서 바로 stop()을 호출하면 자기 자신을 cancel할 수 있어 별도 스레드에서 정리
                 Thread {
                     logger.error(
                         "[LoadGenerator] Avg latency SLO violated for $highLatencyWindows windows " +
@@ -105,13 +120,11 @@ class LoadGenerator(
         activeUserCount.reset()
         isRunning = true
 
-        // ExecutorService 생성
         executorService = Executors.newVirtualThreadPerTaskExecutor()
 
         val startTime = System.currentTimeMillis()
 
         if (config.rampUpSeconds > 0) {
-            // Ramp-up: 점진적으로 Virtual User 시작
             val delayBetweenUsers = (config.rampUpSeconds * 1000.0) / config.virtualUsers
             
             Thread {
@@ -119,18 +132,16 @@ class LoadGenerator(
                     if (!isRunning) return@Thread
                     
                     executorService?.submit {
-                        activeUserCount.increment() // Virtual User 시작
+                        activeUserCount.increment()
                         try {
-                            // 각 Virtual Thread가 시작된 시점부터 durationSeconds만큼 실행
                             val threadStartTime = System.currentTimeMillis()
                             val threadEndTime = threadStartTime + (config.durationSeconds * 1000L)
                             runLoadTest(config, threadEndTime, userIndex)
                         } finally {
-                            activeUserCount.decrement() // Virtual User 종료
+                            activeUserCount.decrement()
                         }
                     }
                     
-                    // 다음 사용자 시작 전 대기
                     if (userIndex < config.virtualUsers - 1) {
                         Thread.sleep(delayBetweenUsers.toLong())
                     }
@@ -141,15 +152,15 @@ class LoadGenerator(
             
             logger.info("[LoadGenerator] Ramp-up 시작 - ${config.virtualUsers}명을 ${config.rampUpSeconds}초에 걸쳐 시작합니다.")
         } else {
-            // 즉시 시작 (기존 방식)
+            // 즉시 시작
             val endTime = startTime + (config.durationSeconds * 1000L)
             repeat(config.virtualUsers) { userIndex ->
                 executorService?.submit {
-                    activeUserCount.increment() // Virtual User 시작
+                    activeUserCount.increment()
                     try {
                         runLoadTest(config, endTime, userIndex)
                     } finally {
-                        activeUserCount.decrement() // Virtual User 종료
+                        activeUserCount.decrement()
                     }
                 }
             }
@@ -157,8 +168,153 @@ class LoadGenerator(
             logger.info("[LoadGenerator] ${config.virtualUsers}개의 Virtual Thread가 즉시 시작되었습니다.")
         }
 
-        // 모니터링 스레드 시작
-        startMonitoring(config.testId, startTime, config.durationSeconds)
+        startMonitoring(
+            testId = config.testId,
+            startTime = startTime,
+            durationSeconds = config.durationSeconds
+        )
+    }
+
+    private fun startStressTest(
+        config: TestConfig
+    ) {
+        val stressConfig = config.stressTestConfig
+        
+        val totalSteps = ((stressConfig.maxUsers - stressConfig.startUsers) / stressConfig.stepIncrement) + 1
+        val totalDuration = totalSteps * stressConfig.stepDuration
+        
+        logger.info(
+            "[LoadGenerator] STRESS 테스트 시작 - ID: ${config.testId}, URL: ${config.targetUrl}, " +
+            "Users: ${stressConfig.startUsers} -> ${stressConfig.maxUsers} (Step: +${stressConfig.stepIncrement} / ${stressConfig.stepDuration}s), " +
+            "Total Steps: $totalSteps, Total Duration: ${totalDuration}s, Method: ${config.httpMethod}"
+        )
+
+        // 통계 집계기 생성
+        statsCollector = WindowedStatsCollector(config.testId)
+
+        // 통계 리포터 생성 및 시작
+        stopRequested = false
+
+        val latencyStopThresholdMs = 2_000.0
+        val latencyStopConsecutiveWindows = 3
+        var highLatencyWindows = 0
+
+        statsReporter = StatsReporter(
+            collector = statsCollector!!,
+            reportStub = reportServiceStub,
+            getActiveUsers = { activeUserCount.sum().toInt() }
+        ) { stat ->
+            if (stopRequested || !isRunning) return@StatsReporter
+            if (stat.requestsPerSecond <= 0) return@StatsReporter
+
+            if (stat.avgLatencyMs >= latencyStopThresholdMs) {
+                highLatencyWindows++
+            } else {
+                highLatencyWindows = 0
+            }
+
+            if (highLatencyWindows >= latencyStopConsecutiveWindows && !stopRequested) {
+                stopRequested = true
+                Thread {
+                    logger.error(
+                        "[LoadGenerator] Avg latency SLO violated for $highLatencyWindows windows " +
+                            "(>=${latencyStopThresholdMs}ms). Stopping stress test. testId=${config.testId}"
+                    )
+                    stop()
+                }.start()
+            }
+        }
+        statsReporter?.start()
+
+        // 통계 초기화
+        requestCount.reset()
+        errorCount.reset()
+        activeUserCount.reset()
+        isRunning = true
+
+        // ExecutorService 생성
+        executorService = Executors.newVirtualThreadPerTaskExecutor()
+
+        val testStartTime = System.currentTimeMillis()
+        val testEndTime = testStartTime + (totalDuration * 1000L)
+        
+        // Stress Test 관리 스레드
+        Thread {
+            var currentStep = 0
+            var currentUsers = stressConfig.startUsers
+            
+            while (currentUsers <= stressConfig.maxUsers && isRunning) {
+                val stepStartTime = System.currentTimeMillis()
+                val stepEndTime = stepStartTime + (stressConfig.stepDuration * 1000L)
+                
+                // 현재 단계의 사용자 수 계산
+                val usersToStart = if (currentStep == 0) {
+                    currentUsers
+                } else {
+                    stressConfig.stepIncrement
+                }
+                
+                logger.info(
+                    "[StressTest] Step ${currentStep + 1}/$totalSteps 시작 - " +
+                    "사용자 추가: +$usersToStart (총 활성: ${currentUsers}명), " +
+                    "단계 지속 시간: ${stressConfig.stepDuration}s"
+                )
+                
+                // 이번 단계에서 추가할 사용자들 시작
+                repeat(usersToStart) { userIndexInStep ->
+                    if (!isRunning) return@Thread
+                    
+                    executorService?.submit {
+                        activeUserCount.increment()
+                        try {
+                            runLoadTest(
+                                config = config,
+                                endTime = testEndTime,
+                                userIndex = currentUsers + userIndexInStep
+                            )
+                        } finally {
+                            activeUserCount.decrement()
+                        }
+                    }
+                }
+                
+                // 다음 단계까지 대기
+                try {
+                    val remainingTime = stepEndTime - System.currentTimeMillis()
+                    if (remainingTime > 0) {
+                        Thread.sleep(remainingTime)
+                    }
+                } catch (_: InterruptedException) {
+                    logger.warn("[StressTest] Stress test interrupted")
+                    Thread.currentThread().interrupt()
+                    return@Thread
+                }
+                
+                logger.info(
+                    "[StressTest] Step ${currentStep + 1}/$totalSteps 완료 - " +
+                    "현재 활성 사용자: ${activeUserCount.sum()}명"
+                )
+                
+                // 다음 단계로
+                currentStep++
+                currentUsers += stressConfig.stepIncrement
+            }
+            
+            logger.info(
+                "[StressTest] 모든 단계 완료 - 최대 사용자: ${stressConfig.maxUsers}명, " +
+                "현재 활성 사용자: ${activeUserCount.sum()}명"
+            )
+        }.apply {
+            isDaemon = false
+            name = "stress-test-manager-${config.testId}"
+            start()
+        }
+
+        startMonitoring(
+            testId = config.testId,
+            startTime = testStartTime,
+            durationSeconds = totalDuration
+        )
     }
 
     private fun runLoadTest(
@@ -228,7 +384,10 @@ class LoadGenerator(
                     val latency = System.currentTimeMillis() - startRequestTime
                     
                     // 예외 발생 시에도 통계 기록
-                    statsCollector?.record(latency, false)
+                    statsCollector?.record(
+                        latencyMs = latency,
+                        isSuccess = false
+                    )
 
                     if (consecutiveErrors <= 3) {
                         logger.warn(
@@ -242,6 +401,7 @@ class LoadGenerator(
                             "[LoadGenerator] User $userIndex - Too many consecutive errors ($consecutiveErrors). " +
                             "Stopping this thread. Target: ${config.targetUrl}"
                         )
+
                         break
                     }
                     
@@ -256,6 +416,7 @@ class LoadGenerator(
                                 "서버 다운 가능성이 있습니다. 모든 스레드 중단."
                             )
                             isRunning = false
+
                             break
                         }
                     }
@@ -310,8 +471,9 @@ class LoadGenerator(
                     lastErrorCount = currentErrorCount
                     lastCheckTime = currentTime
 
-                } catch (e: InterruptedException) {
+                } catch (_: InterruptedException) {
                     Thread.currentThread().interrupt()
+
                     break
                 }
             }
@@ -336,6 +498,9 @@ class LoadGenerator(
 
         isRunning = false
 
+        // Breaking Point 정보 조회
+        val breakingPoint = statsReporter?.getBreakingPoint()
+
         // 통계 리포터 중지
         statsReporter?.stop()
         statsReporter = null
@@ -346,7 +511,7 @@ class LoadGenerator(
             if (!executorService?.awaitTermination(5, TimeUnit.SECONDS)!!) {
                 executorService?.shutdownNow()
             }
-        } catch (e: InterruptedException) {
+        } catch (_: InterruptedException) {
             executorService?.shutdownNow()
             Thread.currentThread().interrupt()
         }
@@ -354,7 +519,7 @@ class LoadGenerator(
         monitoringThread?.interrupt()
         try {
             monitoringThread?.join(1000)
-        } catch (e: InterruptedException) {
+        } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             // 정상적인 종료 과정이므로 로그 출력하지 않음
         }
@@ -366,6 +531,22 @@ class LoadGenerator(
             "[LoadGenerator] 부하 테스트 종료 - " +
             "Total Requests: ${requestCount.sum()}, Total Errors: ${errorCount.sum()}"
         )
+        
+        // Breaking Point 정보 출력
+        if (breakingPoint != null) {
+            val saturationInfo = if (breakingPoint.tpsSaturated) {
+                " | TPS Saturation 발생 ⚠️"
+            } else {
+                ""
+            }
+            
+            logger.warn(
+                "📊 [테스트 요약] Breaking Point가 감지되었습니다! " +
+                "한계점: ${breakingPoint.users}명 (상태: ${breakingPoint.status})${saturationInfo}"
+            )
+        } else {
+            logger.info("📊 [테스트 요약] Breaking Point가 감지되지 않았습니다. 시스템이 안정적으로 부하를 처리했습니다.")
+        }
     }
 
     fun getStats(): LoadGeneratorStats {
@@ -385,7 +566,7 @@ class LoadGenerator(
 
         val separator = if (baseUrl.contains('?')) '&' else '?'
         val queryString = queryParams.entries.joinToString("&") { (key, value) ->
-            "${java.net.URLEncoder.encode(key, "UTF-8")}=${java.net.URLEncoder.encode(value, "UTF-8")}"
+            "${URLEncoder.encode(key, "UTF-8")}=${URLEncoder.encode(value, "UTF-8")}"
         }
 
         return "$baseUrl$separator$queryString"

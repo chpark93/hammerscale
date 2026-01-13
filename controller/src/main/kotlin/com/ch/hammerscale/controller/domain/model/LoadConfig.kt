@@ -3,29 +3,38 @@ package com.ch.hammerscale.controller.domain.model
 import java.net.URI
 
 data class LoadConfig(
+    val testType: TestType = TestType.LOAD,
     val targetUrl: String,
-    val virtualUsers: Int,
-    val durationSeconds: Int,
+    val virtualUsers: Int = 0, // LOAD 테스트에서만 사용
+    val durationSeconds: Int = 0, // LOAD 테스트에서만 사용
     val method: HttpMethod,
     val headers: Map<String, String> = emptyMap(),
     val queryParams: Map<String, String> = emptyMap(),
     val requestBody: String? = null,
-    val rampUpSeconds: Int = 0  // 0 = 즉시 시작, >0 = 점진적 증가
+    val rampUpSeconds: Int = 0, // LOAD 테스트에서만 사용 (0 = 즉시 시작)
+    val stressTestConfig: StressTestConfig? = null  // STRESS 테스트에서만 사용
 ) {
     init {
         require(targetUrl.isNotBlank()) { "targetUrl cannot be empty." }
         require(isValidUrl(targetUrl)) { "targetUrl must be a valid URL format. input value: $targetUrl" }
-        require(virtualUsers >= 1) { "virtualUsers must be at least 1. input value: $virtualUsers" }
-        require(durationSeconds >= 1) { "durationSeconds must be greater than or equal to 1. input value: $durationSeconds" }
-        require(rampUpSeconds >= 0) { "rampUpSeconds must be greater than or equal to 0. input value: $rampUpSeconds" }
-        require(rampUpSeconds <= durationSeconds) { "rampUpSeconds ($rampUpSeconds) cannot be greater than durationSeconds ($durationSeconds)" }
 
-        // TODO: POST/PUT/PATCH의 경우 -> 추가 로직 필요
-        // POST/PUT/PATCH는 일반적으로 Body를 가질 수 있음
+        when (testType) {
+            TestType.LOAD -> {
+                require(virtualUsers >= 1) { "virtualUsers must be at least 1 for LOAD test. input value: $virtualUsers" }
+                require(durationSeconds >= 1) { "durationSeconds must be at least 1 for LOAD test. input value: $durationSeconds" }
+                require(rampUpSeconds >= 0) { "rampUpSeconds must be non-negative. input value: $rampUpSeconds" }
+                require(rampUpSeconds <= durationSeconds) { "rampUpSeconds ($rampUpSeconds) cannot be greater than durationSeconds ($durationSeconds)" }
+            }
+            TestType.STRESS -> {
+                requireNotNull(stressTestConfig) { "stressTestConfig is required for STRESS test" }
+            }
+        }
+
+        // POST / PUT / PATCH는 일반적으로 Body를 가질 수 있음
         if (method in listOf(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH)) {
-            // Body가 있으면 Content-Type 헤더 권장 (하지만 필수는 아님)
+            // Body가 있으면 Content-Type 헤더 권장
             if (requestBody != null && requestBody.isNotBlank() && !headers.containsKey("Content-Type")) {
-                // 경고는 로깅으로 처리하거나, 여기서는 통과
+                // 경고는 로깅으로 처리 또는 통과
             }
         }
     }

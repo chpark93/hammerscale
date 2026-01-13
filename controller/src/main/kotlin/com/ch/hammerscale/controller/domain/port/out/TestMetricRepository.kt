@@ -23,6 +23,8 @@ data class TestMetricData(
     val p95Latency: Double,
     val p99Latency: Double,
     val errorCount: Int,
-    val activeUsers: Int
+    val errorRate: Double,
+    val activeUsers: Int,
+    val healthStatus: String
 )
 

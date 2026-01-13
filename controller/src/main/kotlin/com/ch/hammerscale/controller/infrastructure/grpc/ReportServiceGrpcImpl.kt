@@ -46,24 +46,25 @@ class ReportServiceGrpcImpl(
                         testId = stat.testId
                     }
 
+                    val emoji = when (stat.healthStatus) {
+                        "HEALTHY" -> "✅"
+                        "DEGRADED" -> "⚠️"
+                        "CRITICAL" -> "🔥"
+                        "FAILED" -> "❌"
+                        else -> "❓"
+                    }
+                    
                     logger.info(
-                        "[Report] TestID: ${stat.testId} | " +
+                        "$emoji [Report] TestID: ${stat.testId} | " +
+                        "Status: ${stat.healthStatus} | " +
                         "TPS: ${stat.requestsPerSecond} | " +
                         "Latency: Avg=${String.format("%.1f", stat.avgLatencyMs)}ms " +
                         "p50=${String.format("%.1f", stat.p50LatencyMs)}ms " +
                         "p95=${String.format("%.1f", stat.p95LatencyMs)}ms " +
                         "p99=${String.format("%.1f", stat.p99LatencyMs)}ms | " +
-                        "Errors: ${stat.errorCount} | " +
+                        "Errors: ${stat.errorCount} (${String.format("%.2f", stat.errorRate * 100)}%) | " +
                         "Active Users: ${stat.activeUsers}"
                     )
-
-                    if (stat.errorCount > 0) {
-                        logger.warn("🔴 [Warning] Error Detected! TestID: ${stat.testId}, Error Count: ${stat.errorCount}")
-                    }
-
-                    if (stat.avgLatencyMs > 1000) {
-                        logger.warn("🟠 [Warning] High Latency! TestID: ${stat.testId}, Avg Latency: ${stat.avgLatencyMs}ms")
-                    }
 
                     totalProcessed++
                     batch.add(stat)

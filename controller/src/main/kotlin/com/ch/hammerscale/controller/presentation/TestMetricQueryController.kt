@@ -51,7 +51,9 @@ data class MetricDataResponse(
     val p95Latency: Double,
     val p99Latency: Double,
     val errorCount: Int,
-    val activeUsers: Int
+    val errorRate: Double,
+    val activeUsers: Int,
+    val healthStatus: String
 )
 
 private fun TestMetricData.toResponse(): MetricDataResponse {
@@ -63,7 +65,9 @@ private fun TestMetricData.toResponse(): MetricDataResponse {
         p95Latency = this.p95Latency,
         p99Latency = this.p99Latency,
         errorCount = this.errorCount,
-        activeUsers = this.activeUsers
+        errorRate = this.errorRate,
+        activeUsers = this.activeUsers,
+        healthStatus = this.healthStatus
     )
 }
 

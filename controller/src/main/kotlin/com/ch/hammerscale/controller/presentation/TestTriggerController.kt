@@ -2,7 +2,9 @@ package com.ch.hammerscale.controller.presentation
 
 import com.ch.hammerscale.controller.domain.model.HttpMethod
 import com.ch.hammerscale.controller.domain.model.LoadConfig
+import com.ch.hammerscale.controller.domain.model.StressTestConfig
 import com.ch.hammerscale.controller.domain.model.TestPlan
+import com.ch.hammerscale.controller.domain.model.TestType
 import com.ch.hammerscale.controller.domain.port.out.LoadAgentPort
 import com.ch.hammerscale.controller.domain.port.out.TestPlanRepository
 import com.ch.hammerscale.controller.infrastructure.grpc.AgentConnectionException
@@ -30,24 +32,37 @@ class TestTriggerController(
     fun triggerTest(
         @RequestBody req: TriggerRequest
     ): String {
+        val testType = TestType.valueOf(req.testType.uppercase())
+        
+        val stressConfig = if (testType == TestType.STRESS && req.stressConfig != null) {
+            StressTestConfig(
+                startUsers = req.stressConfig.startUsers,
+                maxUsers = req.stressConfig.maxUsers,
+                stepDuration = req.stressConfig.stepDuration,
+                stepIncrement = req.stressConfig.stepIncrement
+            )
+        } else null
+        
         val testPlan = TestPlan.create(
             title = req.title ?: "Test Plan",
             config = LoadConfig(
+                testType = testType,
                 targetUrl = req.targetUrl,
-                virtualUsers = req.virtualUsers,
-                durationSeconds = req.durationSeconds,
+                virtualUsers = req.virtualUsers ?: 0,
+                durationSeconds = req.durationSeconds ?: 0,
                 method = HttpMethod.valueOf(req.method.uppercase()),
                 headers = req.headers ?: emptyMap(),
                 queryParams = req.queryParams ?: emptyMap(),
                 requestBody = req.requestBody,
-                rampUpSeconds = req.rampUpSeconds ?: 0
+                rampUpSeconds = req.rampUpSeconds ?: 0,
+                stressTestConfig = stressConfig
             )
         )
 
         testPlanRepository.save(
             testPlan = testPlan
         )
-        logger.info("[TestTrigger] TestPlan 생성 및 저장 완료 - ID: ${testPlan.id}, Status: READY")
+        logger.info("[TestTrigger] TestPlan 생성 및 저장 완료 - ID: ${testPlan.id}, Status: READY, Type: ${testType.name}")
 
         try {
             // Agent에게 테스트 시작 요청
@@ -58,7 +73,7 @@ class TestTriggerController(
             testPlanRepository.save(runningPlan)
             logger.info("[TestTrigger] Agent가 테스트를 시작했습니다 - ID: ${testPlan.id}, Status: RUNNING")
 
-            return "Test started successfully - testId=${testPlan.id}"
+            return "Test started successfully - testId=${testPlan.id}, type=${testType.name}"
 
         } catch (e: AgentConnectionException) {
             // Agent 호출 실패 시 FAILED 상태로 업데이트
@@ -75,13 +90,27 @@ data class TriggerRequest(
     val title: String? = null,
     @field:NotBlank
     val targetUrl: String,
-    @field:Min(1)
-    @field:Max(200_000)
-    val virtualUsers: Int,
-    @field:Min(1)
-    @field:Max(3600)
-    val durationSeconds: Int,
+    
+    // 테스트 타입: "LOAD" | "STRESS"
+    val testType: String = "LOAD",
 
+    // ===== LOAD 테스트 전용 =====
+    @field:Min(0)
+    @field:Max(200_000)
+    val virtualUsers: Int? = null, // LOAD 타입에서 필수
+    
+    @field:Min(0)
+    @field:Max(3600)
+    val durationSeconds: Int? = null, // LOAD 타입에서 필수
+    
+    // Ramp-up 시간 (초). 0 = 즉시 시작, >0 = 점진적으로 Virtual User 증가
+    @field:Min(0)
+    val rampUpSeconds: Int? = null,
+
+    // ===== STRESS 테스트 전용 =====
+    val stressConfig: StressConfigRequest? = null,
+
+    // ===== 공통 설정 =====
     // HTTP Method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
     val method: String = "GET",
 
@@ -92,11 +121,21 @@ data class TriggerRequest(
     val queryParams: Map<String, String>? = null,
 
     // Request Body (JSON 문자열 등)
-    val requestBody: String? = null,
+    val requestBody: String? = null
+)
 
-    // Ramp-up 시간 (초). 0 = 즉시 시작, >0 = 점진적으로 Virtual User 증가
-    // 예: virtualUsers=1000, rampUpSeconds=60 → 1초에 약 16명씩 증가
-    @field:Min(0)
-    val rampUpSeconds: Int? = null
+data class StressConfigRequest(
+    @field:Min(1)
+    val startUsers: Int,
+    
+    @field:Min(2)
+    @field:Max(200_000)
+    val maxUsers: Int,
+    
+    @field:Min(1)
+    val stepDuration: Int, // 각 단계 지속 시간 (초)
+    
+    @field:Min(1)
+    val stepIncrement: Int // 각 단계마다 증가할 사용자 수
 )
 

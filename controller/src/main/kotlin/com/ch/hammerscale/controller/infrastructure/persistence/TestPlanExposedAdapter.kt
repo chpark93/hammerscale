@@ -2,8 +2,10 @@ package com.ch.hammerscale.controller.infrastructure.persistence
 
 import com.ch.hammerscale.controller.domain.model.HttpMethod
 import com.ch.hammerscale.controller.domain.model.LoadConfig
+import com.ch.hammerscale.controller.domain.model.StressTestConfig
 import com.ch.hammerscale.controller.domain.model.TestPlan
 import com.ch.hammerscale.controller.domain.model.TestStatus
+import com.ch.hammerscale.controller.domain.model.TestType
 import com.ch.hammerscale.controller.domain.port.out.TestPlanRepository
 import com.ch.hammerscale.controller.infrastructure.persistence.table.TestPlans
 import com.fasterxml.jackson.core.type.TypeReference
@@ -44,14 +46,23 @@ class TestPlanExposedAdapter(
             }) {
                 it[title] = testPlan.title
                 it[targetUrl] = testPlan.config.targetUrl
+                it[testType] = testPlan.config.testType.name
                 it[virtualUsers] = testPlan.config.virtualUsers
                 it[durationSeconds] = testPlan.config.durationSeconds
+                it[rampUpSeconds] = testPlan.config.rampUpSeconds
                 it[method] = testPlan.config.method.name
                 it[status] = testPlan.status.name
                 it[createdAt] = testPlan.createdAt.atZone(ZoneId.systemDefault()).toInstant()
                 it[headers] = headersJson
                 it[queryParams] = queryParamsJson
                 it[requestBody] = testPlan.config.requestBody
+                
+                // Stress Test 설정
+                val stressConfig = testPlan.config.stressTestConfig
+                it[stressStartUsers] = stressConfig?.startUsers
+                it[stressMaxUsers] = stressConfig?.maxUsers
+                it[stressStepDuration] = stressConfig?.stepDuration
+                it[stressStepIncrement] = stressConfig?.stepIncrement
             }
 
             testPlan
@@ -60,14 +71,23 @@ class TestPlanExposedAdapter(
                 it[id] = testPlan.id
                 it[title] = testPlan.title
                 it[targetUrl] = testPlan.config.targetUrl
+                it[testType] = testPlan.config.testType.name
                 it[virtualUsers] = testPlan.config.virtualUsers
                 it[durationSeconds] = testPlan.config.durationSeconds
+                it[rampUpSeconds] = testPlan.config.rampUpSeconds
                 it[method] = testPlan.config.method.name
                 it[status] = testPlan.status.name
                 it[createdAt] = testPlan.createdAt.atZone(ZoneId.systemDefault()).toInstant()
                 it[headers] = headersJson
                 it[queryParams] = queryParamsJson
                 it[requestBody] = testPlan.config.requestBody
+                
+                // Stress Test 설정
+                val stressConfig = testPlan.config.stressTestConfig
+                it[stressStartUsers] = stressConfig?.startUsers
+                it[stressMaxUsers] = stressConfig?.maxUsers
+                it[stressStepDuration] = stressConfig?.stepDuration
+                it[stressStepIncrement] = stressConfig?.stepIncrement
             }
 
             testPlan
@@ -98,18 +118,32 @@ class TestPlanExposedAdapter(
         val queryParams: Map<String, String> = if (queryParamsJson != null) {
             objectMapper.readValue(queryParamsJson, object : TypeReference<Map<String, String>>() {})
         } else emptyMap()
+        
+        val testType = TestType.valueOf(this[TestPlans.testType])
+        
+        val stressTestConfig = if (testType == TestType.STRESS) {
+            StressTestConfig(
+                startUsers = this[TestPlans.stressStartUsers]!!,
+                maxUsers = this[TestPlans.stressMaxUsers]!!,
+                stepDuration = this[TestPlans.stressStepDuration]!!,
+                stepIncrement = this[TestPlans.stressStepIncrement]!!
+            )
+        } else null
 
         return TestPlan(
             id = this[TestPlans.id],
             title = this[TestPlans.title],
             config = LoadConfig(
+                testType = testType,
                 targetUrl = this[TestPlans.targetUrl],
                 virtualUsers = this[TestPlans.virtualUsers],
                 durationSeconds = this[TestPlans.durationSeconds],
                 method = HttpMethod.valueOf(this[TestPlans.method]),
                 headers = headers,
                 queryParams = queryParams,
-                requestBody = this[TestPlans.requestBody]
+                requestBody = this[TestPlans.requestBody],
+                rampUpSeconds = this[TestPlans.rampUpSeconds],
+                stressTestConfig = stressTestConfig
             ),
             status = TestStatus.valueOf(this[TestPlans.status]),
             createdAt = LocalDateTime.ofInstant(

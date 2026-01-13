@@ -16,7 +16,6 @@ class WindowedStatsCollector(
     private val minLatency = AtomicLong(Long.MAX_VALUE)
     private val maxLatency = AtomicLong(Long.MIN_VALUE)
     
-    // HdrHistogram for percentile calculation (1ns to 1 hour, 3 significant digits)
     @Volatile
     private var histogram = Histogram(3600000000000L, 3)
 
@@ -41,10 +40,10 @@ class WindowedStatsCollector(
         minLatency.updateAndGet { current -> if (current < latencyMs) current else latencyMs }
         maxLatency.updateAndGet { current -> if (current > latencyMs) current else latencyMs }
         
-        // 히스토그램에 레이턴시 기록 (밀리초를 마이크로초로 변환)
+        // 히스토그램에 레이턴시 기록
         try {
             histogram.recordValue(latencyMs * 1000) // ms -> μs
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // 값이 범위를 벗어나면 무시
         }
     }
@@ -79,7 +78,7 @@ class WindowedStatsCollector(
         // TPS 계산
         val tps = total.toInt()
         
-        // 히스토그램에서 퍼센타일 계산 (마이크로초 -> 밀리초로 변환)
+        // 히스토그램에서 퍼센타일 계산
         val oldHistogram = histogram
         histogram = Histogram(3600000000000L, 3) // 새 히스토그램으로 교체
         
@@ -95,6 +94,18 @@ class WindowedStatsCollector(
             oldHistogram.getValueAtPercentile(99.0) / 1000.0
         } else 0.0
         
+        // 에러율 계산
+        val errorRate = if (total > 0) {
+            fail.toDouble() / total
+        } else 0.0
+        
+        // Health Status 판단
+        val healthStatus = determineHealthStatus(
+            avgLatencyMs = avgLatency,
+            errorRate = errorRate,
+            requestCount = total.toInt()
+        )
+        
         return TestStat.newBuilder()
             .setTestId(testId)
             .setTimestamp(System.currentTimeMillis())
@@ -105,6 +116,8 @@ class WindowedStatsCollector(
             .setP95LatencyMs(p95)
             .setP99LatencyMs(p99)
             .setErrorCount(fail.toInt())
+            .setErrorRate(errorRate)
+            .setHealthStatus(healthStatus)
             .build()
     }
 
@@ -127,6 +140,16 @@ class WindowedStatsCollector(
         
         val tps = total.toInt()
         
+        val errorRate = if (total > 0) {
+            fail.toDouble() / total
+        } else 0.0
+        
+        val healthStatus = determineHealthStatus(
+            avgLatencyMs = avgLatency,
+            errorRate = errorRate,
+            requestCount = tps
+        )
+        
         return TestStat.newBuilder()
             .setTestId(testId)
             .setTimestamp(System.currentTimeMillis())
@@ -134,6 +157,8 @@ class WindowedStatsCollector(
             .setRequestsPerSecond(tps)
             .setAvgLatencyMs(avgLatency)
             .setErrorCount(fail.toInt())
+            .setErrorRate(errorRate)
+            .setHealthStatus(healthStatus)
             .build()
     }
 
@@ -148,6 +173,48 @@ class WindowedStatsCollector(
         minLatency.set(Long.MAX_VALUE)
         maxLatency.set(Long.MIN_VALUE)
         histogram = Histogram(3600000000000L, 3)
+    }
+    
+    /**
+     * 메트릭을 기반으로 건강 상태를 판단
+     */
+    private fun determineHealthStatus(
+        avgLatencyMs: Double,
+        errorRate: Double,
+        requestCount: Int
+    ): String {
+        // 요청이 너무 적으면 우선 판단 [HEALTHY]
+        if (requestCount < 10) {
+            return "HEALTHY"
+        }
+        
+        // 에러율이 높으면 우선 판단 [FAILED]
+        if (errorRate > 0.20) {
+            return "FAILED"
+        }
+        
+        if (errorRate > 0.05) {
+            return "CRITICAL"
+        }
+        
+        if (errorRate > 0.01) {
+            return "DEGRADED"
+        }
+        
+        // 에러율이 낮아도 레이턴시가 높으면 문제
+        if (avgLatencyMs > 2000.0) {
+            return "FAILED"
+        }
+        
+        if (avgLatencyMs > 1000.0) {
+            return "CRITICAL"
+        }
+        
+        if (avgLatencyMs > 500.0) {
+            return "DEGRADED"
+        }
+        
+        return "HEALTHY"
     }
 }
 

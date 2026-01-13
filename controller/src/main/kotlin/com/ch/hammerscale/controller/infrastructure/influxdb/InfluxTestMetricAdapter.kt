@@ -83,7 +83,9 @@ class InfluxTestMetricAdapter(
                         p95Latency = (record.values["p95_latency"] as? Number)?.toDouble() ?: 0.0,
                         p99Latency = (record.values["p99_latency"] as? Number)?.toDouble() ?: 0.0,
                         errorCount = (record.values["error_count"] as? Number)?.toInt() ?: 0,
-                        activeUsers = (record.values["active_users"] as? Number)?.toInt() ?: 0
+                        errorRate = (record.values["error_rate"] as? Number)?.toDouble() ?: 0.0,
+                        activeUsers = (record.values["active_users"] as? Number)?.toInt() ?: 0,
+                        healthStatus = (record.values["health_status"] as? String) ?: "HEALTHY"
                     )
                 }
                 .toList()
@@ -104,12 +106,14 @@ class InfluxTestMetricAdapter(
     private fun TestStat.toPoint(): Point {
         return Point.measurement("load_test_metrics")
             .addTag("testId", this.testId)
+            .addTag("health_status", this.healthStatus)
             .addField("tps", this.requestsPerSecond)
             .addField("avg_latency", this.avgLatencyMs)
             .addField("p50_latency", this.p50LatencyMs)
             .addField("p95_latency", this.p95LatencyMs)
             .addField("p99_latency", this.p99LatencyMs)
             .addField("error_count", this.errorCount)
+            .addField("error_rate", this.errorRate)
             .addField("active_users", this.activeUsers)
             .time(Instant.ofEpochMilli(this.timestamp), WritePrecision.MS)
     }
