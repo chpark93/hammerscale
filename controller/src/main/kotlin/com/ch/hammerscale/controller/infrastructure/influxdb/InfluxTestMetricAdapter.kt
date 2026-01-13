@@ -34,7 +34,9 @@ class InfluxTestMetricAdapter(
         }
 
         try {
-            val points = stats.map { stat -> stat.toPoint() }
+            val points = stats.map { stat ->
+                stat.toPoint()
+            }
 
             influxDBClient.getWriteKotlinApi().writePoints(
                 points = points,

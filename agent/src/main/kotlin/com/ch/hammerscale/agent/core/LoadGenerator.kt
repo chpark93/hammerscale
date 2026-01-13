@@ -47,7 +47,7 @@ class LoadGenerator(
         }
 
         when (val testType = config.testType.uppercase()) {
-            "LOAD" -> startLoadTest(
+            "LOAD", "SOAK" -> startLoadTest(
                 config = config
             )
             "STRESS" -> startStressTest(
@@ -72,8 +72,9 @@ class LoadGenerator(
             "Ramp-up: None (instant)"
         }
         
+        val testTypeName = config.testType.uppercase()
         logger.info(
-            "[LoadGenerator] LOAD 테스트 시작 - ID: ${config.testId}, URL: ${config.targetUrl}, " +
+            "[LoadGenerator] $testTypeName 테스트 시작 - ID: ${config.testId}, URL: ${config.targetUrl}, " +
             "Users: ${config.virtualUsers}, Duration: ${config.durationSeconds}s, Method: ${config.httpMethod}, $rampUpInfo"
         )
 

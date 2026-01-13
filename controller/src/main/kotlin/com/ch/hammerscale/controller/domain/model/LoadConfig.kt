@@ -12,7 +12,7 @@ data class LoadConfig(
     val queryParams: Map<String, String> = emptyMap(),
     val requestBody: String? = null,
     val rampUpSeconds: Int = 0, // LOAD 테스트에서만 사용 (0 = 즉시 시작)
-    val stressTestConfig: StressTestConfig? = null,  // STRESS 테스트에서만 사용
+    val stressTestConfig: StressTestConfig? = null, // STRESS 테스트에서만 사용
     val spikeTestConfig: SpikeTestConfig? = null // SPIKE 테스트에서만 사용
 ) {
     init {
@@ -20,9 +20,9 @@ data class LoadConfig(
         require(isValidUrl(targetUrl)) { "targetUrl must be a valid URL format. input value: $targetUrl" }
 
         when (testType) {
-            TestType.LOAD -> {
-                require(virtualUsers >= 1) { "virtualUsers must be at least 1 for LOAD test. input value: $virtualUsers" }
-                require(durationSeconds >= 1) { "durationSeconds must be at least 1 for LOAD test. input value: $durationSeconds" }
+            TestType.LOAD, TestType.SOAK -> {
+                require(virtualUsers >= 1) { "virtualUsers must be at least 1 for $testType test. input value: $virtualUsers" }
+                require(durationSeconds >= 1) { "durationSeconds must be at least 1 for $testType test. input value: $durationSeconds" }
                 require(rampUpSeconds >= 0) { "rampUpSeconds must be non-negative. input value: $rampUpSeconds" }
                 require(rampUpSeconds <= durationSeconds) { "rampUpSeconds ($rampUpSeconds) cannot be greater than durationSeconds ($durationSeconds)" }
             }

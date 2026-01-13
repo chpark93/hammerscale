@@ -97,17 +97,17 @@ data class TriggerRequest(
     @field:NotBlank
     val targetUrl: String,
     
-    // 테스트 타입: "LOAD" | "STRESS"
+    // 테스트 타입: LOAD | STRESS | SPIKE | SOAK
     val testType: String = "LOAD",
 
-    // ===== LOAD 테스트 전용 =====
+    // ===== LOAD / SOAK 테스트 전용 =====
     @field:Min(0)
     @field:Max(200_000)
-    val virtualUsers: Int? = null, // LOAD 타입에서 필수
+    val virtualUsers: Int? = null, // LOAD / SOAK 타입에서 필수
     
     @field:Min(0)
-    @field:Max(3600)
-    val durationSeconds: Int? = null, // LOAD 타입에서 필수
+    @field:Max(86400) // 최대 24시간 (For SOAK 테스트)
+    val durationSeconds: Int? = null, // LOAD / SOAK 타입에서 필수
     
     // Ramp-up 시간 (초). 0 : 즉시 시작, 0 > : 점진적으로 Virtual User 증가
     @field:Min(0)

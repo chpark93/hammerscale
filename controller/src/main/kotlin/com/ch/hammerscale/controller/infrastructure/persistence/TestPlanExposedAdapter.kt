@@ -2,6 +2,7 @@ package com.ch.hammerscale.controller.infrastructure.persistence
 
 import com.ch.hammerscale.controller.domain.model.HttpMethod
 import com.ch.hammerscale.controller.domain.model.LoadConfig
+import com.ch.hammerscale.controller.domain.model.SpikeTestConfig
 import com.ch.hammerscale.controller.domain.model.StressTestConfig
 import com.ch.hammerscale.controller.domain.model.TestPlan
 import com.ch.hammerscale.controller.domain.model.TestStatus
@@ -63,6 +64,13 @@ class TestPlanExposedAdapter(
                 it[stressMaxUsers] = stressConfig?.maxUsers
                 it[stressStepDuration] = stressConfig?.stepDuration
                 it[stressStepIncrement] = stressConfig?.stepIncrement
+                
+                // Spike Test 설정
+                val spikeConfig = testPlan.config.spikeTestConfig
+                it[spikeBaseUsers] = spikeConfig?.baseUsers
+                it[spikeSpikeUsers] = spikeConfig?.spikeUsers
+                it[spikeSpikeDuration] = spikeConfig?.spikeDuration
+                it[spikeRecoveryDuration] = spikeConfig?.recoveryDuration
             }
 
             testPlan
@@ -88,6 +96,13 @@ class TestPlanExposedAdapter(
                 it[stressMaxUsers] = stressConfig?.maxUsers
                 it[stressStepDuration] = stressConfig?.stepDuration
                 it[stressStepIncrement] = stressConfig?.stepIncrement
+                
+                // Spike Test 설정
+                val spikeConfig = testPlan.config.spikeTestConfig
+                it[spikeBaseUsers] = spikeConfig?.baseUsers
+                it[spikeSpikeUsers] = spikeConfig?.spikeUsers
+                it[spikeSpikeDuration] = spikeConfig?.spikeDuration
+                it[spikeRecoveryDuration] = spikeConfig?.recoveryDuration
             }
 
             testPlan
@@ -129,6 +144,15 @@ class TestPlanExposedAdapter(
                 stepIncrement = this[TestPlans.stressStepIncrement]!!
             )
         } else null
+        
+        val spikeTestConfig = if (testType == TestType.SPIKE) {
+            SpikeTestConfig(
+                baseUsers = this[TestPlans.spikeBaseUsers]!!,
+                spikeUsers = this[TestPlans.spikeSpikeUsers]!!,
+                spikeDuration = this[TestPlans.spikeSpikeDuration]!!,
+                recoveryDuration = this[TestPlans.spikeRecoveryDuration]!!
+            )
+        } else null
 
         return TestPlan(
             id = this[TestPlans.id],
@@ -143,7 +167,8 @@ class TestPlanExposedAdapter(
                 queryParams = queryParams,
                 requestBody = this[TestPlans.requestBody],
                 rampUpSeconds = this[TestPlans.rampUpSeconds],
-                stressTestConfig = stressTestConfig
+                stressTestConfig = stressTestConfig,
+                spikeTestConfig = spikeTestConfig
             ),
             status = TestStatus.valueOf(this[TestPlans.status]),
             createdAt = LocalDateTime.ofInstant(
