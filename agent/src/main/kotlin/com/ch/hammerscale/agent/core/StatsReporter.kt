@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class StatsReporter(
     private val collector: WindowedStatsCollector,
     private val reportStub: ReportServiceGrpcKt.ReportServiceCoroutineStub,
+    private val getActiveUsers: () -> Int, // 실시간 활성 사용자 수를 가져오는 람다
     private val onWindowStat: ((stat: com.project.common.proto.TestStat) -> Unit)? = null
 ) {
     private val logger = LoggerFactory.getLogger(StatsReporter::class.java)
@@ -20,9 +21,7 @@ class StatsReporter(
     /**
      * 통계 전송 시작
      */
-    fun start(
-        activeUsers: Int
-    ) {
+    fun start() {
         if (isRunning.getAndSet(true)) {
             logger.warn("StatsReporter is already running. Ignoring start request.")
             return
@@ -40,8 +39,8 @@ class StatsReporter(
                     }
                     
                     try {
-                        // 1초간의 통계를 가져오고 초기화
-                        val stat = collector.snapshotAndReset(activeUsers)
+                        // 1초간의 통계를 가져오고 초기화 (실시간 활성 사용자 수 전달)
+                        val stat = collector.snapshotAndReset(getActiveUsers())
 
                         // 로컬 보호 로직(에러율/레이턴시 등) 평가 훅
                         try {
@@ -95,7 +94,7 @@ class StatsReporter(
         reportingJob = null
         
         try {
-            val finalStat = collector.getCurrentSnapshot(0)
+            val finalStat = collector.getCurrentSnapshot(getActiveUsers())
             if (finalStat.requestsPerSecond > 0) {
                 runBlocking {
                     try {

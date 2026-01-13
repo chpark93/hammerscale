@@ -28,6 +28,7 @@ class LoadGenerator(
 
     private val requestCount = LongAdder()
     private val errorCount = LongAdder()
+    private val activeUserCount = LongAdder() // 현재 활성 Virtual User 수 추적
 
     private var executorService: ExecutorService? = null
     private var monitoringThread: Thread? = null
@@ -62,7 +63,7 @@ class LoadGenerator(
         // 통계 리포터 생성 및 시작
         stopRequested = false
 
-        // “부하/장애” 상황에서의 보호 로직:
+        // [부하 / 장애] 상황에서의 보호 로직
         // - 1초 윈도우 평균 레이턴시가 임계치를 연속으로 넘으면 자동 중단
         val latencyStopThresholdMs = 2_000.0
         val latencyStopConsecutiveWindows = 3
@@ -70,7 +71,8 @@ class LoadGenerator(
 
         statsReporter = StatsReporter(
             collector = statsCollector!!,
-            reportStub = reportServiceStub
+            reportStub = reportServiceStub,
+            getActiveUsers = { activeUserCount.sum().toInt() } // 실시간 활성 사용자 수 전달
         ) { stat ->
             if (stopRequested || !isRunning) return@StatsReporter
 
@@ -95,19 +97,18 @@ class LoadGenerator(
                 }.start()
             }
         }
-        statsReporter?.start(config.virtualUsers)
+        statsReporter?.start()
 
         // 통계 초기화
         requestCount.reset()
         errorCount.reset()
+        activeUserCount.reset()
         isRunning = true
 
         // ExecutorService 생성
         executorService = Executors.newVirtualThreadPerTaskExecutor()
 
-        // 각 Virtual User에 대해 작업 제출 (Ramp-up 적용)
         val startTime = System.currentTimeMillis()
-        val endTime = startTime + (config.durationSeconds * 1000L)
 
         if (config.rampUpSeconds > 0) {
             // Ramp-up: 점진적으로 Virtual User 시작
@@ -118,7 +119,15 @@ class LoadGenerator(
                     if (!isRunning) return@Thread
                     
                     executorService?.submit {
-                        runLoadTest(config, endTime, userIndex)
+                        activeUserCount.increment() // Virtual User 시작
+                        try {
+                            // 각 Virtual Thread가 시작된 시점부터 durationSeconds만큼 실행
+                            val threadStartTime = System.currentTimeMillis()
+                            val threadEndTime = threadStartTime + (config.durationSeconds * 1000L)
+                            runLoadTest(config, threadEndTime, userIndex)
+                        } finally {
+                            activeUserCount.decrement() // Virtual User 종료
+                        }
                     }
                     
                     // 다음 사용자 시작 전 대기
@@ -133,9 +142,15 @@ class LoadGenerator(
             logger.info("[LoadGenerator] Ramp-up 시작 - ${config.virtualUsers}명을 ${config.rampUpSeconds}초에 걸쳐 시작합니다.")
         } else {
             // 즉시 시작 (기존 방식)
+            val endTime = startTime + (config.durationSeconds * 1000L)
             repeat(config.virtualUsers) { userIndex ->
                 executorService?.submit {
-                    runLoadTest(config, endTime, userIndex)
+                    activeUserCount.increment() // Virtual User 시작
+                    try {
+                        runLoadTest(config, endTime, userIndex)
+                    } finally {
+                        activeUserCount.decrement() // Virtual User 종료
+                    }
                 }
             }
             
