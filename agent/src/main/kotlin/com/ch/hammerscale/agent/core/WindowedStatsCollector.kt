@@ -80,10 +80,11 @@ class WindowedStatsCollector(
         
         // 히스토그램에서 퍼센타일 계산
         val oldHistogram = histogram
-        histogram = Histogram(3600000000000L, 3) // 새 히스토그램으로 교체
+        // 새 히스토그램으로 교체
+        histogram = Histogram(3600000000000L, 3)
         
         val p50 = if (oldHistogram.totalCount > 0) {
-            oldHistogram.getValueAtPercentile(50.0) / 1000.0 // μs -> ms
+            oldHistogram.getValueAtPercentile(50.0) / 1000.0
         } else 0.0
         
         val p95 = if (oldHistogram.totalCount > 0) {

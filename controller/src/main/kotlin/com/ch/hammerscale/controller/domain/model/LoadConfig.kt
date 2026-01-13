@@ -12,7 +12,8 @@ data class LoadConfig(
     val queryParams: Map<String, String> = emptyMap(),
     val requestBody: String? = null,
     val rampUpSeconds: Int = 0, // LOAD 테스트에서만 사용 (0 = 즉시 시작)
-    val stressTestConfig: StressTestConfig? = null  // STRESS 테스트에서만 사용
+    val stressTestConfig: StressTestConfig? = null,  // STRESS 테스트에서만 사용
+    val spikeTestConfig: SpikeTestConfig? = null // SPIKE 테스트에서만 사용
 ) {
     init {
         require(targetUrl.isNotBlank()) { "targetUrl cannot be empty." }
@@ -27,6 +28,9 @@ data class LoadConfig(
             }
             TestType.STRESS -> {
                 requireNotNull(stressTestConfig) { "stressTestConfig is required for STRESS test" }
+            }
+            TestType.SPIKE -> {
+                requireNotNull(spikeTestConfig) { "spikeTestConfig is required for SPIKE test" }
             }
         }
 

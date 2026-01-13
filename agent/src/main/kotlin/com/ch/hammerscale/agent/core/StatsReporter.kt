@@ -257,7 +257,7 @@ class StatsReporter(
             logger.error(
                 "$emoji [TPS Saturation 감지!] " +
                 "사용자: ${prevUsers}명 → ${currentUsers}명 (+${userChange}명) | " +
-                "TPS: ${prevTps} → ${currentTps} (${if (tpsChange >= 0) "+" else ""}${tpsChange}) | " +
+                "TPS: $prevTps → $currentTps (${if (tpsChange >= 0) "+" else ""}${tpsChange}) | " +
                 "사용자당 TPS: ${"%.2f".format(prevTpsPerUser)} → ${"%.2f".format(currentTpsPerUser)} " +
                 "(${"%.1f".format(tpsPerUserChangePercent)}%) | " +
                 "Latency: ${"%.1f".format(stat.avgLatencyMs)}ms | " +

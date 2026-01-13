@@ -1,10 +1,6 @@
 package com.ch.hammerscale.controller.presentation
 
-import com.ch.hammerscale.controller.domain.model.HttpMethod
-import com.ch.hammerscale.controller.domain.model.LoadConfig
-import com.ch.hammerscale.controller.domain.model.StressTestConfig
-import com.ch.hammerscale.controller.domain.model.TestPlan
-import com.ch.hammerscale.controller.domain.model.TestType
+import com.ch.hammerscale.controller.domain.model.*
 import com.ch.hammerscale.controller.domain.port.out.LoadAgentPort
 import com.ch.hammerscale.controller.domain.port.out.TestPlanRepository
 import com.ch.hammerscale.controller.infrastructure.grpc.AgentConnectionException
@@ -43,6 +39,15 @@ class TestTriggerController(
             )
         } else null
         
+        val spikeConfig = if (testType == TestType.SPIKE && req.spikeConfig != null) {
+            SpikeTestConfig(
+                baseUsers = req.spikeConfig.baseUsers,
+                spikeUsers = req.spikeConfig.spikeUsers,
+                spikeDuration = req.spikeConfig.spikeDuration,
+                recoveryDuration = req.spikeConfig.recoveryDuration
+            )
+        } else null
+        
         val testPlan = TestPlan.create(
             title = req.title ?: "Test Plan",
             config = LoadConfig(
@@ -55,7 +60,8 @@ class TestTriggerController(
                 queryParams = req.queryParams ?: emptyMap(),
                 requestBody = req.requestBody,
                 rampUpSeconds = req.rampUpSeconds ?: 0,
-                stressTestConfig = stressConfig
+                stressTestConfig = stressConfig,
+                spikeTestConfig = spikeConfig
             )
         )
 
@@ -103,12 +109,15 @@ data class TriggerRequest(
     @field:Max(3600)
     val durationSeconds: Int? = null, // LOAD 타입에서 필수
     
-    // Ramp-up 시간 (초). 0 = 즉시 시작, >0 = 점진적으로 Virtual User 증가
+    // Ramp-up 시간 (초). 0 : 즉시 시작, 0 > : 점진적으로 Virtual User 증가
     @field:Min(0)
     val rampUpSeconds: Int? = null,
 
     // ===== STRESS 테스트 전용 =====
     val stressConfig: StressConfigRequest? = null,
+
+    // ===== SPIKE 테스트 전용 =====
+    val spikeConfig: SpikeConfigRequest? = null,
 
     // ===== 공통 설정 =====
     // HTTP Method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
@@ -137,5 +146,20 @@ data class StressConfigRequest(
     
     @field:Min(1)
     val stepIncrement: Int // 각 단계마다 증가할 사용자 수
+)
+
+data class SpikeConfigRequest(
+    @field:Min(1)
+    val baseUsers: Int, // 기본 사용자 수
+    
+    @field:Min(2)
+    @field:Max(200_000)
+    val spikeUsers: Int, // 급증 시 사용자 수
+    
+    @field:Min(1)
+    val spikeDuration: Int, // 급증 유지 시간 (초)
+    
+    @field:Min(0)
+    val recoveryDuration: Int // 회복 시간 (초)
 )
 

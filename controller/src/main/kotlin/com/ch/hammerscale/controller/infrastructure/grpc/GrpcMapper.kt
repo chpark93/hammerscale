@@ -2,6 +2,7 @@ package com.ch.hammerscale.controller.infrastructure.grpc
 
 import com.ch.hammerscale.controller.domain.model.TestPlan
 import com.ch.hammerscale.controller.domain.model.TestType
+import com.project.common.proto.SpikeTestConfig
 import com.project.common.proto.StressTestConfig
 import com.project.common.proto.TestConfig
 
@@ -34,6 +35,17 @@ fun TestPlan.toProto(): TestConfig {
                     .setMaxUsers(stressConfig.maxUsers)
                     .setStepDuration(stressConfig.stepDuration)
                     .setStepIncrement(stressConfig.stepIncrement)
+                    .build()
+            )
+        }
+        TestType.SPIKE -> {
+            val spikeConfig = this.config.spikeTestConfig!!
+            builder.setSpikeTestConfig(
+                SpikeTestConfig.newBuilder()
+                    .setBaseUsers(spikeConfig.baseUsers)
+                    .setSpikeUsers(spikeConfig.spikeUsers)
+                    .setSpikeDuration(spikeConfig.spikeDuration)
+                    .setRecoveryDuration(spikeConfig.recoveryDuration)
                     .build()
             )
         }

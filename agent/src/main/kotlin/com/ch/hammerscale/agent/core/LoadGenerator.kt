@@ -53,6 +53,9 @@ class LoadGenerator(
             "STRESS" -> startStressTest(
                 config = config
             )
+            "SPIKE" -> startSpikeTest(
+                config = config
+            )
             else -> {
                 logger.error("[LoadGenerator] Unknown test type: $testType")
                 return
@@ -307,6 +310,174 @@ class LoadGenerator(
         }.apply {
             isDaemon = false
             name = "stress-test-manager-${config.testId}"
+            start()
+        }
+
+        startMonitoring(
+            testId = config.testId,
+            startTime = testStartTime,
+            durationSeconds = totalDuration
+        )
+    }
+
+    private fun startSpikeTest(
+        config: TestConfig
+    ) {
+        val spikeConfig = config.spikeTestConfig
+        
+        val totalDuration = spikeConfig.recoveryDuration + spikeConfig.spikeDuration + spikeConfig.recoveryDuration
+        
+        logger.info(
+            "[LoadGenerator] SPIKE 테스트 시작 - ID: ${config.testId}, URL: ${config.targetUrl}, " +
+            "Base: ${spikeConfig.baseUsers}명 -> Spike: ${spikeConfig.spikeUsers}명 -> Base: ${spikeConfig.baseUsers}명, " +
+            "Spike Duration: ${spikeConfig.spikeDuration}s, Recovery: ${spikeConfig.recoveryDuration}s, " +
+            "Total Duration: ${totalDuration}s, Method: ${config.httpMethod}"
+        )
+
+        // 통계 집계기 생성
+        statsCollector = WindowedStatsCollector(config.testId)
+
+        // 통계 리포터 생성 및 시작
+        stopRequested = false
+
+        val latencyStopThresholdMs = 2_000.0
+        val latencyStopConsecutiveWindows = 3
+        var highLatencyWindows = 0
+
+        statsReporter = StatsReporter(
+            collector = statsCollector!!,
+            reportStub = reportServiceStub,
+            getActiveUsers = { activeUserCount.sum().toInt() }
+        ) { stat ->
+            if (stopRequested || !isRunning) return@StatsReporter
+            if (stat.requestsPerSecond <= 0) return@StatsReporter
+
+            if (stat.avgLatencyMs >= latencyStopThresholdMs) {
+                highLatencyWindows++
+            } else {
+                highLatencyWindows = 0
+            }
+
+            if (highLatencyWindows >= latencyStopConsecutiveWindows && !stopRequested) {
+                stopRequested = true
+                Thread {
+                    logger.error(
+                        "[LoadGenerator] Avg latency SLO violated for $highLatencyWindows windows " +
+                            "(>=${latencyStopThresholdMs}ms). Stopping spike test. testId=${config.testId}"
+                    )
+                    stop()
+                }.start()
+            }
+        }
+        statsReporter?.start()
+
+        // 통계 초기화
+        requestCount.reset()
+        errorCount.reset()
+        activeUserCount.reset()
+        isRunning = true
+
+        // ExecutorService 생성
+        executorService = Executors.newVirtualThreadPerTaskExecutor()
+
+        val testStartTime = System.currentTimeMillis()
+        val testEndTime = testStartTime + (totalDuration * 1000L)
+        
+        // Spike Test 관리 스레드
+        Thread {
+            try {
+                // 기본 부하 (Recovery Duration)
+                if (spikeConfig.recoveryDuration > 0) {
+                    logger.info(
+                        "[SpikeTest] Phase 1: 기본 부하 시작 - " +
+                        "${spikeConfig.baseUsers}명, ${spikeConfig.recoveryDuration}초"
+                    )
+                    
+                    repeat(spikeConfig.baseUsers) { userIndex ->
+                        if (!isRunning) return@Thread
+                        
+                        executorService?.submit {
+                            activeUserCount.increment()
+                            try {
+                                runLoadTest(
+                                    config = config,
+                                    endTime = testEndTime,
+                                    userIndex = userIndex
+                                )
+                            } finally {
+                                activeUserCount.decrement()
+                            }
+                        }
+                    }
+                    
+                    Thread.sleep(spikeConfig.recoveryDuration * 1000L)
+                    
+                    logger.info(
+                        "[SpikeTest] Phase 1 완료 - " +
+                        "현재 활성 사용자: ${activeUserCount.sum()}명"
+                    )
+                }
+                
+                // 급증 (Spike)
+                if (!isRunning) return@Thread
+                
+                val spikeIncrement = spikeConfig.spikeUsers - spikeConfig.baseUsers
+                logger.warn(
+                    "🔥 [SpikeTest] Phase 2: 부하 급증! - " +
+                    "${spikeConfig.baseUsers}명 -> ${spikeConfig.spikeUsers}명 (+${spikeIncrement}명), " +
+                    "${spikeConfig.spikeDuration}초 유지"
+                )
+                
+                repeat(spikeIncrement) { userIndex ->
+                    if (!isRunning) return@Thread
+                    
+                    executorService?.submit {
+                        activeUserCount.increment()
+                        try {
+                            runLoadTest(
+                                config = config,
+                                endTime = testEndTime,
+                                userIndex = spikeConfig.baseUsers + userIndex
+                            )
+                        } finally {
+                            activeUserCount.decrement()
+                        }
+                    }
+                }
+                
+                Thread.sleep(spikeConfig.spikeDuration * 1000L)
+                
+                logger.info(
+                    "[SpikeTest] Phase 2 완료 - " +
+                    "피크 활성 사용자: ${activeUserCount.sum()}명"
+                )
+                
+                // 회복 (Recovery)
+                if (!isRunning) return@Thread
+                
+                logger.info(
+                    "📉 [SpikeTest] Phase 3: 부하 감소 및 회복 - " +
+                    "${spikeConfig.recoveryDuration}초 동안 시스템 회복 관찰"
+                )
+                
+                Thread.sleep(spikeConfig.recoveryDuration * 1000L)
+                
+                logger.info(
+                    "[SpikeTest] Phase 3 완료 - " +
+                    "회복 후 활성 사용자: ${activeUserCount.sum()}명"
+                )
+                
+                logger.info("[SpikeTest] 모든 단계 완료")
+                
+            } catch (e: InterruptedException) {
+                logger.warn("[SpikeTest] Spike test interrupted")
+                Thread.currentThread().interrupt()
+            } catch (e: Exception) {
+                logger.error("[SpikeTest] Unexpected error: ${e.message}", e)
+            }
+        }.apply {
+            isDaemon = false
+            name = "spike-test-manager-${config.testId}"
             start()
         }
 

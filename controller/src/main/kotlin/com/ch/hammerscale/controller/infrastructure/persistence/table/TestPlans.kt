@@ -22,4 +22,9 @@ object TestPlans : Table("test_plans") {
     val stressMaxUsers = integer("stress_max_users").nullable()
     val stressStepDuration = integer("stress_step_duration").nullable()
     val stressStepIncrement = integer("stress_step_increment").nullable()
+    // Spike Test 전용 필드
+    val spikeBaseUsers = integer("spike_base_users").nullable()
+    val spikeSpikeUsers = integer("spike_spike_users").nullable()
+    val spikeSpikeDuration = integer("spike_spike_duration").nullable()
+    val spikeRecoveryDuration = integer("spike_recovery_duration").nullable()
 }
