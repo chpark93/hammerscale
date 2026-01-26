@@ -3,6 +3,7 @@ package com.ch.hammerscale.controller.infrastructure.grpc
 import com.ch.hammerscale.controller.domain.model.TestPlan
 import com.ch.hammerscale.controller.domain.port.out.LoadAgentPort
 import com.project.common.proto.AgentServiceGrpcKt
+import com.project.common.proto.Empty
 import com.project.common.proto.TestId
 import io.grpc.ManagedChannel
 import io.grpc.StatusException
@@ -71,6 +72,25 @@ class LoadAgentGrpcAdapter(
         } catch (e: Exception) {
             throw AgentConnectionException(
                 "unexpected error occurred while stopping the test. Plan ID: $planId",
+                e
+            )
+        }
+    }
+
+    override fun ping(): Boolean {
+        return try {
+            runBlocking {
+                val pong = stub.ping(Empty.getDefaultInstance())
+                pong.alive
+            }
+        } catch (e: StatusException) {
+            throw AgentConnectionException(
+                "Failed to ping Agent. Status: ${e.status}",
+                e
+            )
+        } catch (e: Exception) {
+            throw AgentConnectionException(
+                "Failed to connect to Agent: ${e.message}",
                 e
             )
         }

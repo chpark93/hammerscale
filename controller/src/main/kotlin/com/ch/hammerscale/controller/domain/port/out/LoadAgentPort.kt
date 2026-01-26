@@ -10,5 +10,7 @@ interface LoadAgentPort {
     fun stopTest(
         planId: String
     )
+
+    fun ping(): Boolean
 }
 

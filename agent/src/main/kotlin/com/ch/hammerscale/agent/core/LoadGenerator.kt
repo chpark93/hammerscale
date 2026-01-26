@@ -498,7 +498,7 @@ class LoadGenerator(
         val uri = URI.create(finalUrl)
         val httpMethod = config.httpMethod.uppercase()
         var consecutiveErrors = 0
-        val maxConsecutiveErrors = 10  // 연속 10번 에러 시 해당 스레드 중단
+        val maxConsecutiveErrors = 10 // 연속 10번 에러 시 해당 스레드 중단
         var totalRequestCount = 0L // 해당 스레드의 총 요청 수
 
         try {

@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hammerscale - Real-time Load Test Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .test-info {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .test-info-item {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .test-info-label {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .test-info-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .status-healthy {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-degraded {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .status-critical {
+            background: #ef4444;
+            color: white;
+        }
+
+        .status-failed {
+            background: #7f1d1d;
+            color: white;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .metric-card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .metric-value {
+            font-size: 3em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .metric-unit {
+            font-size: 0.5em;
+            color: #888;
+            margin-left: 5px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .chart-container h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            height: 300px;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            font-weight: bold;
+        }
+
+        .connected {
+            color: #10b981;
+        }
+
+        .disconnected {
+            color: #ef4444;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            font-size: 1em;
+        }
+
+        .input-group button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .input-group button:hover {
+            background: #5568d3;
+        }
+
+        .alert {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .alert-critical {
+            background: #fee2e2;
+            color: #7f1d1d;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">
+        <span class="disconnected">● Disconnected</span>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🔨 Hammerscale Dashboard</h1>
+            <p>Real-time Load Test Monitoring</p>
+        </div>
+
+        <div class="header">
+            <div class="input-group">
+                <input type="text" id="testIdInput" placeholder="Enter Test ID (e.g., test-123)" />
+                <button onclick="connectToTest()">Connect</button>
+            </div>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <div class="test-info" id="testInfo" style="display: none;">
+            <div class="test-info-item">
+                <div class="test-info-label">Test ID</div>
+                <div class="test-info-value" id="testIdDisplay">-</div>
+            </div>
+            <div class="test-info-item">
+                <div class="test-info-label">Health Status</div>
+                <div class="test-info-value">
+                    <span id="healthStatus" class="status-badge status-healthy">HEALTHY</span>
+                </div>
+            </div>
+            <div class="test-info-item">
+                <div class="test-info-label">Active Users</div>
+                <div class="test-info-value" id="activeUsers">0</div>
+            </div>
+            <div class="test-info-item">
+                <div class="test-info-label">Duration</div>
+                <div class="test-info-value" id="duration">0s</div>
+            </div>
+        </div>
+
+        <div class="metrics-grid" id="metricsGrid" style="display: none;">
+            <div class="metric-card">
+                <h3>Requests / Second</h3>
+                <div class="metric-value" id="tpsValue">0<span class="metric-unit">TPS</span></div>
+            </div>
+            <div class="metric-card">
+                <h3>Average Latency</h3>
+                <div class="metric-value" id="avgLatencyValue">0<span class="metric-unit">ms</span></div>
+            </div>
+            <div class="metric-card">
+                <h3>P95 Latency</h3>
+                <div class="metric-value" id="p95LatencyValue">0<span class="metric-unit">ms</span></div>
+            </div>
+            <div class="metric-card">
+                <h3>Error Rate</h3>
+                <div class="metric-value" id="errorRateValue">0<span class="metric-unit">%</span></div>
+            </div>
+        </div>
+
+        <div class="chart-container" id="chartContainer" style="display: none;">
+            <h2>📊 TPS & Latency</h2>
+            <div class="canvas-wrapper">
+                <canvas id="tpsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-container" id="chartContainer2" style="display: none;">
+            <h2>📈 Active Users & Error Rate</h2>
+            <div class="canvas-wrapper">
+                <canvas id="usersChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let currentTestId = null;
+        let tpsChart = null;
+        let usersChart = null;
+        let startTime = null;
+        let breakingPointDetected = false;
+
+        const maxDataPoints = 50;
+
+        const tpsData = {
+            labels: [],
+            datasets: [
+                {
+                    label: 'TPS',
+                    data: [],
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Avg Latency (ms)',
+                    data: [],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                }
+            ]
+        };
+
+        const usersData = {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Active Users',
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Error Rate (%)',
+                    data: [],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                }
+            ]
+        };
+
+        function initCharts() {
+            const tpsCtx = document.getElementById('tpsChart').getContext('2d');
+            tpsChart = new Chart(tpsCtx, {
+                type: 'line',
+                data: tpsData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'TPS'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Latency (ms)'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            }
+                        }
+                    }
+                }
+            });
+
+            const usersCtx = document.getElementById('usersChart').getContext('2d');
+            usersChart = new Chart(usersCtx, {
+                type: 'line',
+                data: usersData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Active Users'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Error Rate (%)'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function connectToTest() {
+            const testId = document.getElementById('testIdInput').value.trim();
+            if (!testId) {
+                alert('Please enter a Test ID');
+                return;
+            }
+
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            currentTestId = testId;
+            startTime = Date.now();
+            breakingPointDetected = false;
+            
+            // Reset data
+            tpsData.labels = [];
+            tpsData.datasets[0].data = [];
+            tpsData.datasets[1].data = [];
+            usersData.labels = [];
+            usersData.datasets[0].data = [];
+            usersData.datasets[1].data = [];
+            
+            if (tpsChart) tpsChart.update();
+            if (usersChart) usersChart.update();
+
+            document.getElementById('testInfo').style.display = 'flex';
+            document.getElementById('metricsGrid').style.display = 'grid';
+            document.getElementById('chartContainer').style.display = 'block';
+            document.getElementById('chartContainer2').style.display = 'block';
+            document.getElementById('testIdDisplay').textContent = testId;
+            document.getElementById('alertContainer').innerHTML = '';
+
+            if (!tpsChart) {
+                initCharts();
+            }
+
+            eventSource = new EventSource(`/api/dashboard/stream/${testId}`);
+
+            eventSource.onopen = () => {
+                updateConnectionStatus(true);
+                console.log('Connected to SSE stream');
+            };
+
+            eventSource.addEventListener('metric', (event) => {
+                const metric = JSON.parse(event.data);
+                updateDashboard(metric);
+            });
+
+            eventSource.addEventListener('testCompleted', (event) => {
+                const data = JSON.parse(event.data);
+                console.log('Test completed:', data);
+                updateConnectionStatus(false);
+                
+                showAlert(
+                    `✅ Test completed with status: ${data.status}. <a href="/report.html?testId=${data.testId}" style="color: #667eea; font-weight: bold;">View Report →</a>`,
+                    'success'
+                );
+                
+                // 3초 후 리포트 페이지로 이동
+                setTimeout(() => {
+                    window.location.href = `/report.html?testId=${data.testId}`;
+                }, 3000);
+            });
+
+            eventSource.onerror = (error) => {
+                console.error('SSE Error:', error);
+                updateConnectionStatus(false);
+                showAlert('Connection lost. Trying to reconnect...', 'warning');
+            };
+        }
+
+        function updateDashboard(metric) {
+            // Update test info
+            document.getElementById('activeUsers').textContent = metric.activeUsers;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('duration').textContent = `${elapsed}s`;
+
+            // Update health status
+            const healthBadge = document.getElementById('healthStatus');
+            healthBadge.textContent = metric.healthStatus;
+            healthBadge.className = 'status-badge status-' + metric.healthStatus.toLowerCase();
+
+            // Breaking Point Detection
+            if (!breakingPointDetected && (metric.healthStatus === 'CRITICAL' || metric.healthStatus === 'FAILED')) {
+                breakingPointDetected = true;
+                showAlert(`🔥 Breaking Point Detected! Users: ${metric.activeUsers}, Status: ${metric.healthStatus}`, 'critical');
+            }
+
+            // Update metric cards
+            document.getElementById('tpsValue').innerHTML = `${metric.tps}<span class="metric-unit">TPS</span>`;
+            document.getElementById('avgLatencyValue').innerHTML = `${metric.avgLatency.toFixed(1)}<span class="metric-unit">ms</span>`;
+            document.getElementById('p95LatencyValue').innerHTML = `${metric.p95Latency.toFixed(1)}<span class="metric-unit">ms</span>`;
+            document.getElementById('errorRateValue').innerHTML = `${(metric.errorRate * 100).toFixed(2)}<span class="metric-unit">%</span>`;
+
+            // Update charts
+            const timestamp = new Date(metric.timestamp).toLocaleTimeString();
+            
+            tpsData.labels.push(timestamp);
+            tpsData.datasets[0].data.push(metric.tps);
+            tpsData.datasets[1].data.push(metric.avgLatency);
+
+            usersData.labels.push(timestamp);
+            usersData.datasets[0].data.push(metric.activeUsers);
+            usersData.datasets[1].data.push(metric.errorRate * 100);
+
+            // Keep only last N data points
+            if (tpsData.labels.length > maxDataPoints) {
+                tpsData.labels.shift();
+                tpsData.datasets[0].data.shift();
+                tpsData.datasets[1].data.shift();
+                usersData.labels.shift();
+                usersData.datasets[0].data.shift();
+                usersData.datasets[1].data.shift();
+            }
+
+            tpsChart.update('none');
+            usersChart.update('none');
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.innerHTML = '<span class="connected">● Connected</span>';
+            } else {
+                statusEl.innerHTML = '<span class="disconnected">● Disconnected</span>';
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertContainer = document.getElementById('alertContainer');
+            let alertClass = 'alert';
+            if (type === 'critical') alertClass = 'alert alert-critical';
+            else if (type === 'success') alertClass = 'alert alert-success';
+            else if (type === 'warning') alertClass = 'alert';
+            
+            alertContainer.innerHTML = `<div class="${alertClass}">${message}</div>`;
+        }
+
+        // Auto-connect if testId is in URL
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const testId = params.get('testId');
+            if (testId) {
+                document.getElementById('testIdInput').value = testId;
+                connectToTest();
+            }
+        });
+    </script>
+</body>
+</html>
+

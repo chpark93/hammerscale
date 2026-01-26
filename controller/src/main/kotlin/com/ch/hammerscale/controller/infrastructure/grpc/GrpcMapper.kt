@@ -49,6 +49,8 @@ fun TestPlan.toProto(): TestConfig {
                     .build()
             )
         }
+
+        else -> {}
     }
     
     return builder.build()

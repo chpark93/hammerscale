@@ -76,7 +76,7 @@ enum class HealthStatus(
                 return DEGRADED
             }
             
-            // 에러율이 낮아도 레이턴시가 높으면 문제
+            // 에러율이 낮아도 레이턴시가 높으면 이슈
             if (avgLatencyMs > 2000.0) {
                 return FAILED
             }

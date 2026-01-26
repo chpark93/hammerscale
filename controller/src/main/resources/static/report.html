@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hammerscale - Test Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            font-size: 1em;
+        }
+
+        .input-group button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .input-group button:hover {
+            background: #5568d3;
+        }
+
+        .report-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .report-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-item {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .summary-label {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .summary-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .summary-unit {
+            font-size: 0.5em;
+            color: #888;
+            margin-left: 5px;
+        }
+
+        .alert-box {
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            color: #065f46;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            color: #92400e;
+        }
+
+        .alert-danger {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            color: #7f1d1d;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 20px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -23px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #667eea;
+        }
+
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            left: -18px;
+            top: 17px;
+            width: 2px;
+            height: calc(100% - 12px);
+            background: #e0e0e0;
+        }
+
+        .timeline-item:last-child::after {
+            display: none;
+        }
+
+        .timeline-time {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .timeline-content {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .badge-healthy {
+            background: #10b981;
+            color: white;
+        }
+
+        .badge-degraded {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .badge-critical {
+            background: #ef4444;
+            color: white;
+        }
+
+        .badge-failed {
+            background: #7f1d1d;
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #667eea;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .metric-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .metric-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .metric-value-large {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .link-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+
+        .link-button:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Test Report</h1>
+            <p>Load Test Analysis & Summary</p>
+            
+            <div class="input-group">
+                <input type="text" id="testIdInput" placeholder="Enter Test ID" />
+                <button onclick="loadReport()">Load Report</button>
+            </div>
+        </div>
+
+        <div id="loading" class="report-section loading hidden">
+            Loading report...
+        </div>
+
+        <div id="reportContent" class="hidden">
+            <!-- Test Overview -->
+            <div class="report-section">
+                <h2>📋 Test Overview</h2>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="summary-label">Test ID</div>
+                        <div class="summary-value" style="font-size: 1em;" id="testId">-</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Test Type</div>
+                        <div class="summary-value" style="font-size: 1.2em;" id="testType">-</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Status</div>
+                        <div class="summary-value" style="font-size: 1.2em;" id="status">-</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Duration</div>
+                        <div class="summary-value" id="duration">0<span class="summary-unit">sec</span></div>
+                    </div>
+                </div>
+
+                <a href="#" id="dashboardLink" class="link-button">📊 View Dashboard</a>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="report-section">
+                <h2>🎯 Key Metrics</h2>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="summary-label">Total Requests</div>
+                        <div class="summary-value" id="totalRequests">0</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Total Errors</div>
+                        <div class="summary-value" id="totalErrors">0</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Avg TPS</div>
+                        <div class="summary-value" id="avgTps">0<span class="summary-unit">req/s</span></div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Max TPS</div>
+                        <div class="summary-value" id="maxTps">0<span class="summary-unit">req/s</span></div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Avg Latency</div>
+                        <div class="summary-value" id="avgLatency">0<span class="summary-unit">ms</span></div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Max Latency</div>
+                        <div class="summary-value" id="maxLatency">0<span class="summary-unit">ms</span></div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">P95 Latency</div>
+                        <div class="summary-value" id="p95Latency">0<span class="summary-unit">ms</span></div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Error Rate</div>
+                        <div class="summary-value" id="errorRate">0<span class="summary-unit">%</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Breaking Point -->
+            <div id="breakingPointSection" class="report-section hidden">
+                <h2>🔥 Breaking Point Detected</h2>
+                <div class="alert-box alert-danger">
+                    <strong>⚠️ System reached its limit!</strong>
+                    <p id="breakingPointMessage"></p>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-item">
+                        <div class="metric-label">Active Users at Breaking Point</div>
+                        <div class="metric-value-large" id="bpUsers">-</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">TPS at Breaking Point</div>
+                        <div class="metric-value-large" id="bpTps">-</div>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-item">
+                        <div class="metric-label">Latency at Breaking Point</div>
+                        <div class="metric-value-large" id="bpLatency">- ms</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Error Rate at Breaking Point</div>
+                        <div class="metric-value-large" id="bpErrorRate">- %</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TPS Saturation -->
+            <div id="tpsSaturationSection" class="report-section hidden">
+                <h2>📉 TPS Saturation Detected</h2>
+                <div class="alert-box alert-warning">
+                    <strong>⚠️ TPS stopped increasing!</strong>
+                    <p id="tpsSaturationMessage"></p>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-item">
+                        <div class="metric-label">Active Users at Saturation</div>
+                        <div class="metric-value-large" id="satUsers">-</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Max TPS Achieved</div>
+                        <div class="metric-value-large" id="satMaxTps">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Health Status Changes -->
+            <div id="healthChangesSection" class="report-section hidden">
+                <h2>💚 Health Status Timeline</h2>
+                <div class="timeline" id="healthTimeline"></div>
+            </div>
+
+            <!-- No Issues -->
+            <div id="noIssuesSection" class="report-section hidden">
+                <h2>✅ Test Results</h2>
+                <div class="alert-box alert-success">
+                    <strong>🎉 All systems performing well!</strong>
+                    <p>No breaking points or TPS saturation detected. System handled the load successfully.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function loadReport() {
+            const testId = document.getElementById('testIdInput').value.trim();
+            if (!testId) {
+                alert('Please enter a Test ID');
+                return;
+            }
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('reportContent').classList.add('hidden');
+
+            fetch(`/api/dashboard/analysis/${testId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load report');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    displayReport(data);
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('reportContent').classList.remove('hidden');
+                })
+                .catch(error => {
+                    alert('Error loading report: ' + error.message);
+                    document.getElementById('loading').classList.add('hidden');
+                });
+        }
+
+        function displayReport(data) {
+            // Overview
+            document.getElementById('testId').textContent = data.testId;
+            document.getElementById('testType').textContent = data.testType;
+            document.getElementById('status').textContent = data.status;
+            document.getElementById('duration').innerHTML = `${data.totalDuration}<span class="summary-unit">sec</span>`;
+            document.getElementById('dashboardLink').href = `/dashboard.html?testId=${data.testId}`;
+
+            // Key Metrics
+            document.getElementById('totalRequests').textContent = data.totalRequests.toLocaleString();
+            document.getElementById('totalErrors').textContent = data.totalErrors.toLocaleString();
+            document.getElementById('avgTps').innerHTML = `${data.avgTps.toFixed(1)}<span class="summary-unit">req/s</span>`;
+            document.getElementById('maxTps').innerHTML = `${data.maxTps}<span class="summary-unit">req/s</span>`;
+            document.getElementById('avgLatency').innerHTML = `${data.avgLatency.toFixed(1)}<span class="summary-unit">ms</span>`;
+            document.getElementById('maxLatency').innerHTML = `${data.maxLatency.toFixed(1)}<span class="summary-unit">ms</span>`;
+            document.getElementById('p95Latency').innerHTML = `${data.p95Latency.toFixed(1)}<span class="summary-unit">ms</span>`;
+            document.getElementById('errorRate').innerHTML = `${(data.avgErrorRate * 100).toFixed(2)}<span class="summary-unit">%</span>`;
+
+            // Breaking Point
+            if (data.breakingPoint) {
+                document.getElementById('breakingPointSection').classList.remove('hidden');
+                const bp = data.breakingPoint;
+                document.getElementById('breakingPointMessage').textContent = 
+                    `System reached ${bp.healthStatus} status at ${new Date(bp.timestamp).toLocaleTimeString()}`;
+                document.getElementById('bpUsers').textContent = bp.activeUsers;
+                document.getElementById('bpTps').textContent = bp.tps;
+                document.getElementById('bpLatency').textContent = bp.avgLatency.toFixed(1) + ' ms';
+                document.getElementById('bpErrorRate').textContent = (bp.errorRate * 100).toFixed(2) + ' %';
+            }
+
+            // TPS Saturation
+            if (data.tpsSaturation) {
+                document.getElementById('tpsSaturationSection').classList.remove('hidden');
+                const sat = data.tpsSaturation;
+                document.getElementById('tpsSaturationMessage').textContent = 
+                    `TPS peaked at ${sat.maxTps} and started declining at ${new Date(sat.timestamp).toLocaleTimeString()}`;
+                document.getElementById('satUsers').textContent = sat.activeUsers;
+                document.getElementById('satMaxTps').textContent = sat.maxTps;
+            }
+
+            // Health Status Changes
+            if (data.healthStatusChanges && data.healthStatusChanges.length > 0) {
+                document.getElementById('healthChangesSection').classList.remove('hidden');
+                const timeline = document.getElementById('healthTimeline');
+                timeline.innerHTML = '';
+                
+                data.healthStatusChanges.forEach(change => {
+                    const item = document.createElement('div');
+                    item.className = 'timeline-item';
+                    item.innerHTML = `
+                        <div class="timeline-time">${new Date(change.timestamp).toLocaleString()}</div>
+                        <div class="timeline-content">
+                            <strong>Status Changed:</strong>
+                            <span class="status-badge badge-${change.fromStatus.toLowerCase()}">${change.fromStatus}</span>
+                            → 
+                            <span class="status-badge badge-${change.toStatus.toLowerCase()}">${change.toStatus}</span>
+                            <br/>
+                            <small>Users: ${change.activeUsers} | TPS: ${change.tps} | Latency: ${change.avgLatency.toFixed(1)}ms</small>
+                        </div>
+                    `;
+                    timeline.appendChild(item);
+                });
+            }
+
+            // No Issues
+            if (!data.breakingPoint && !data.tpsSaturation && data.healthStatusChanges.length === 0) {
+                document.getElementById('noIssuesSection').classList.remove('hidden');
+            }
+        }
+
+        // Auto-load if testId is in URL
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const testId = params.get('testId');
+            if (testId) {
+                document.getElementById('testIdInput').value = testId;
+                loadReport();
+            }
+        });
+    </script>
+</body>
+</html>
+

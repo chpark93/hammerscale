@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hammerscale - Load Testing Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.2em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 15px;
+            background: white;
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tab-button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .form-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group small {
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #10b981;
+        }
+
+        .btn-secondary:hover {
+            background: #059669;
+        }
+
+        .test-type-selector {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .test-type-option {
+            padding: 20px;
+            border: 3px solid #e0e0e0;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .test-type-option:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .test-type-option.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .test-type-option .icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .test-type-option .name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .test-type-option .desc {
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        .config-section {
+            display: none;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .config-section.active {
+            display: block;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .connected {
+            color: #10b981;
+        }
+
+        .disconnected {
+            color: #ef4444;
+        }
+
+        .test-info {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            display: none;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .test-info.active {
+            display: flex;
+        }
+
+        .test-info-item {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .test-info-label {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .test-info-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .status-healthy {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-degraded {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .status-critical {
+            background: #ef4444;
+            color: white;
+        }
+
+        .status-failed {
+            background: #7f1d1d;
+            color: white;
+        }
+
+        .metrics-grid {
+            display: none;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metrics-grid.active {
+            display: grid;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .metric-card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .metric-value {
+            font-size: 3em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .metric-unit {
+            font-size: 0.5em;
+            color: #888;
+            margin-left: 5px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .chart-container.active {
+            display: block;
+        }
+
+        .chart-container h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            height: 300px;
+        }
+
+        .alert {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .alert-critical {
+            background: #fee2e2;
+            color: #7f1d1d;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        #alertContainer {
+            margin-bottom: 20px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">
+        <span class="disconnected">● Ready</span>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🔨 Hammerscale</h1>
+            <p>Production-Ready Load Testing Platform</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('newTest')">🚀 New Test</button>
+            <button class="tab-button" onclick="switchTab('monitor')">📊 Monitor Test</button>
+            <button class="tab-button" onclick="switchTab('history')">📜 Test History</button>
+        </div>
+
+        <!-- New Test Tab -->
+        <div id="newTest" class="tab-content active">
+            <div class="form-section">
+                <h2>🎯 Create New Load Test</h2>
+                
+                <div class="test-type-selector">
+                    <div class="test-type-option selected" onclick="selectTestType('LOAD')">
+                        <div class="icon">📊</div>
+                        <div class="name">LOAD</div>
+                        <div class="desc">일정 부하 유지</div>
+                    </div>
+                    <div class="test-type-option" onclick="selectTestType('STRESS')">
+                        <div class="icon">📈</div>
+                        <div class="name">STRESS</div>
+                        <div class="desc">점진적 증가</div>
+                    </div>
+                    <div class="test-type-option" onclick="selectTestType('SPIKE')">
+                        <div class="icon">⚡</div>
+                        <div class="name">SPIKE</div>
+                        <div class="desc">급격한 변화</div>
+                    </div>
+                    <div class="test-type-option" onclick="selectTestType('SOAK')">
+                        <div class="icon">⏰</div>
+                        <div class="name">SOAK</div>
+                        <div class="desc">장시간 안정성</div>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Test Title</label>
+                        <input type="text" id="testTitle" placeholder="My Load Test" />
+                        <small>Optional: Give your test a name</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Target URL *</label>
+                        <input type="text" id="targetUrl" placeholder="http://localhost:8080/api/endpoint" required />
+                        <small>The URL to test</small>
+                    </div>
+                    <div class="form-group">
+                        <label>HTTP Method</label>
+                        <select id="httpMethod">
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="DELETE">DELETE</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- LOAD/SOAK Config -->
+                <div id="loadConfig" class="config-section active">
+                    <h3>⚙️ Load/Soak Configuration</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Virtual Users *</label>
+                            <input type="number" id="virtualUsers" value="100" min="1" max="200000" />
+                            <small>Number of concurrent users</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Duration (seconds) *</label>
+                            <input type="number" id="durationSeconds" value="60" min="1" max="86400" />
+                            <small>How long to run the test</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Ramp-up Time (seconds)</label>
+                            <input type="number" id="rampUpSeconds" value="0" min="0" />
+                            <small>Gradual user increase (0 = instant)</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STRESS Config -->
+                <div id="stressConfig" class="config-section">
+                    <h3>⚙️ Stress Test Configuration</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Start Users *</label>
+                            <input type="number" id="stressStartUsers" value="10" min="1" />
+                        </div>
+                        <div class="form-group">
+                            <label>Max Users *</label>
+                            <input type="number" id="stressMaxUsers" value="500" min="2" />
+                        </div>
+                        <div class="form-group">
+                            <label>Step Duration (seconds) *</label>
+                            <input type="number" id="stressStepDuration" value="30" min="1" />
+                        </div>
+                        <div class="form-group">
+                            <label>Step Increment *</label>
+                            <input type="number" id="stressStepIncrement" value="50" min="1" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SPIKE Config -->
+                <div id="spikeConfig" class="config-section">
+                    <h3>⚙️ Spike Test Configuration</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Base Users *</label>
+                            <input type="number" id="spikeBaseUsers" value="10" min="1" />
+                        </div>
+                        <div class="form-group">
+                            <label>Spike Users *</label>
+                            <input type="number" id="spikeSpikeUsers" value="500" min="2" />
+                        </div>
+                        <div class="form-group">
+                            <label>Spike Duration (seconds) *</label>
+                            <input type="number" id="spikeSpikeDuration" value="60" min="1" />
+                        </div>
+                        <div class="form-group">
+                            <label>Recovery Duration (seconds) *</label>
+                            <input type="number" id="spikeRecoveryDuration" value="30" min="0" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Request Body (Optional)</label>
+                    <textarea id="requestBody" rows="4" placeholder='{"key": "value"}'></textarea>
+                    <small>JSON body for POST/PUT/PATCH requests</small>
+                </div>
+
+                <button class="btn" onclick="startNewTest()" id="startTestBtn">🚀 Start Test & Monitor</button>
+            </div>
+        </div>
+
+        <!-- Monitor Test Tab -->
+        <div id="monitor" class="tab-content">
+            <div class="form-section">
+                <h2>📊 Monitor Existing Test</h2>
+                <div class="form-group">
+                    <input type="text" id="monitorTestId" placeholder="Enter Test ID" style="margin-bottom: 10px;" />
+                    <button class="btn btn-secondary" onclick="connectToExistingTest()">Connect to Test</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test History Tab -->
+        <div id="history" class="tab-content">
+            <div class="form-section">
+                <h2>📜 Test History</h2>
+                <p style="color: #888;">Coming soon: List of all previous tests</p>
+            </div>
+        </div>
+
+        <!-- Monitoring Section (Shared) -->
+        <div id="alertContainer"></div>
+
+        <div class="test-info" id="testInfo">
+            <div class="test-info-item">
+                <div class="test-info-label">Test ID</div>
+                <div class="test-info-value" id="testIdDisplay">-</div>
+            </div>
+            <div class="test-info-item">
+                <div class="test-info-label">Health Status</div>
+                <div class="test-info-value">
+                    <span id="healthStatus" class="status-badge status-healthy">HEALTHY</span>
+                </div>
+            </div>
+            <div class="test-info-item">
+                <div class="test-info-label">Active Users</div>
+                <div class="test-info-value" id="activeUsers">0</div>
+            </div>
+            <div class="test-info-item">
+                <div class="test-info-label">Duration</div>
+                <div class="test-info-value" id="duration">0s</div>
+            </div>
+        </div>
+
+        <div class="metrics-grid" id="metricsGrid">
+            <div class="metric-card">
+                <h3>Requests / Second</h3>
+                <div class="metric-value" id="tpsValue">0<span class="metric-unit">TPS</span></div>
+            </div>
+            <div class="metric-card">
+                <h3>Average Latency</h3>
+                <div class="metric-value" id="avgLatencyValue">0<span class="metric-unit">ms</span></div>
+            </div>
+            <div class="metric-card">
+                <h3>P95 Latency</h3>
+                <div class="metric-value" id="p95LatencyValue">0<span class="metric-unit">ms</span></div>
+            </div>
+            <div class="metric-card">
+                <h3>Error Rate</h3>
+                <div class="metric-value" id="errorRateValue">0<span class="metric-unit">%</span></div>
+            </div>
+        </div>
+
+        <div class="chart-container" id="chartContainer">
+            <h2>📊 TPS & Latency</h2>
+            <div class="canvas-wrapper">
+                <canvas id="tpsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-container" id="chartContainer2">
+            <h2>📈 Active Users & Error Rate</h2>
+            <div class="canvas-wrapper">
+                <canvas id="usersChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
+
