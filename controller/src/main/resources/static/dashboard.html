@@ -261,6 +261,16 @@
             </div>
         </div>
 
+        <!-- Test Control Buttons -->
+        <div style="display: none; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin-bottom: 20px; gap: 10px;" id="testControlButtons">
+            <button onclick="window.open('/report.html?testId=' + currentTestId, '_blank')" style="flex: 1; padding: 12px; background: #10b981; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">
+                📊 View Report
+            </button>
+            <button onclick="stopCurrentTest()" id="stopTestBtn" style="flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">
+                ⏹️ Stop Test
+            </button>
+        </div>
+
         <div class="metrics-grid" id="metricsGrid" style="display: none;">
             <div class="metric-card">
                 <h3>Requests / Second</h3>
@@ -458,6 +468,12 @@
             document.getElementById('testIdDisplay').textContent = testId;
             document.getElementById('alertContainer').innerHTML = '';
 
+            // Show control buttons
+            const controlButtons = document.getElementById('testControlButtons');
+            if (controlButtons) {
+                controlButtons.style.display = 'flex';
+            }
+
             if (!tpsChart) {
                 initCharts();
             }
@@ -470,6 +486,8 @@
             };
 
             eventSource.addEventListener('metric', (event) => {
+                // test
+                console.log('📥 metric 이벤트 수신:', event.data);
                 const metric = JSON.parse(event.data);
                 updateDashboard(metric);
             });
@@ -477,17 +495,50 @@
             eventSource.addEventListener('testCompleted', (event) => {
                 const data = JSON.parse(event.data);
                 console.log('Test completed:', data);
-                updateConnectionStatus(false);
+                
+                // SSE 연결 종료
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+                
+                // 상태를 "Completed"로 변경
+                updateConnectionStatus(false, true);
+                
+                // Stop 버튼 비활성화
+                const stopBtn = document.getElementById('stopTestBtn');
+                if (stopBtn) {
+                    stopBtn.disabled = true;
+                    stopBtn.textContent = '⏹️ Test Completed';
+                    stopBtn.style.background = '#9ca3af';
+                    stopBtn.style.cursor = 'not-allowed';
+                }
+                
+                // Duration을 최종값으로 고정
+                const finalDuration = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('duration').textContent = `${finalDuration}s (Completed)`;
+                document.getElementById('duration').style.color = '#10b981';
+                document.getElementById('duration').style.fontWeight = 'bold';
+                
+                // 자동 리다이렉션 제거 - 사용자가 버튼을 클릭해야 Report로 이동
+                const reportButton = `
+                    <div style="margin-top: 10px;">
+                        <a href="/report.html?testId=${data.testId}" 
+                           style="display: inline-block; padding: 12px 30px; background: #667eea; 
+                                  color: white; text-decoration: none; border-radius: 10px; 
+                                  font-weight: bold; transition: background 0.3s;"
+                           onmouseover="this.style.background='#5568d3'"
+                           onmouseout="this.style.background='#667eea'">
+                            📊 View Detailed Report
+                        </a>
+                    </div>
+                `;
                 
                 showAlert(
-                    `✅ Test completed with status: ${data.status}. <a href="/report.html?testId=${data.testId}" style="color: #667eea; font-weight: bold;">View Report →</a>`,
+                    `✅ Test completed with status: ${data.status}!<br/><br/>
+                    Dashboard shows final results. Click below for detailed analysis.${reportButton}`,
                     'success'
                 );
-                
-                // 3초 후 리포트 페이지로 이동
-                setTimeout(() => {
-                    window.location.href = `/report.html?testId=${data.testId}`;
-                }, 3000);
             });
 
             eventSource.onerror = (error) => {
@@ -498,6 +549,9 @@
         }
 
         function updateDashboard(metric) {
+            // test
+            console.log('📊 updateDashboard 호출!', metric);
+
             // Update test info
             document.getElementById('activeUsers').textContent = metric.activeUsers;
             const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -545,9 +599,11 @@
             usersChart.update('none');
         }
 
-        function updateConnectionStatus(connected) {
+        function updateConnectionStatus(connected, completed = false) {
             const statusEl = document.getElementById('connectionStatus');
-            if (connected) {
+            if (completed) {
+                statusEl.innerHTML = '<span class="connected">● Test Completed</span>';
+            } else if (connected) {
                 statusEl.innerHTML = '<span class="connected">● Connected</span>';
             } else {
                 statusEl.innerHTML = '<span class="disconnected">● Disconnected</span>';
@@ -562,6 +618,61 @@
             else if (type === 'warning') alertClass = 'alert';
             
             alertContainer.innerHTML = `<div class="${alertClass}">${message}</div>`;
+        }
+
+        // Stop Test
+        async function stopCurrentTest() {
+            if (!currentTestId) {
+                alert('No active test');
+                return;
+            }
+
+            if (!confirm('Are you sure you want to stop this test?')) {
+                return;
+            }
+
+            const stopBtn = document.getElementById('stopTestBtn');
+            if (stopBtn) {
+                stopBtn.disabled = true;
+                stopBtn.textContent = '⏹️ Stopping...';
+            }
+
+            try {
+                const response = await fetch(`/api/test/${currentTestId}/stop`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('✅ Test stopped successfully', 'success');
+                    
+                    if (eventSource) {
+                        eventSource.close();
+                        eventSource = null;
+                    }
+                    
+                    updateConnectionStatus(false, true);
+                    
+                    if (stopBtn) {
+                        stopBtn.textContent = '⏹️ Test Stopped';
+                        stopBtn.style.background = '#9ca3af';
+                        stopBtn.style.cursor = 'not-allowed';
+                    }
+                } else {
+                    showAlert(`⚠️ ${result.message}`, 'warning');
+                    if (stopBtn) {
+                        stopBtn.disabled = false;
+                        stopBtn.textContent = '⏹️ Stop Test';
+                    }
+                }
+            } catch (error) {
+                showAlert(`❌ Failed to stop test: ${error.message}`, 'critical');
+                if (stopBtn) {
+                    stopBtn.disabled = false;
+                    stopBtn.textContent = '⏹️ Stop Test';
+                }
+            }
         }
 
         // Auto-connect if testId is in URL

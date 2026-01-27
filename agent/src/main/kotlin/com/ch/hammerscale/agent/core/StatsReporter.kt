@@ -1,9 +1,11 @@
 package com.ch.hammerscale.agent.core
 
+import com.ch.hammerscale.agent.core.dto.BreakingPointInfo
 import com.project.common.proto.ReportServiceGrpcKt
 import com.project.common.proto.TestStat
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.consumeAsFlow
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -16,8 +18,12 @@ class StatsReporter(
     private val logger = LoggerFactory.getLogger(StatsReporter::class.java)
     
     private var reportingJob: Job? = null
+    private var streamingJob: Job? = null
     private val isRunning = AtomicBoolean(false)
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    
+    // gRPC 스트림용 Channel
+    private val statsChannel = Channel<TestStat>(Channel.UNLIMITED)
     
     // 상태 변화 추적
     @Volatile
@@ -48,6 +54,19 @@ class StatsReporter(
         
         logger.info("[StatsReporter] 통계 전송 시작")
         
+        // gRPC 스트림 시작 (한 번만 열고 계속 사용)
+        streamingJob = scope.launch {
+            try {
+                reportStub.streamStats(statsChannel.consumeAsFlow())
+                logger.info("[StatsReporter] gRPC 스트림 정상 종료")
+            } catch (e: CancellationException) {
+                logger.info("[StatsReporter] gRPC 스트림 취소됨")
+            } catch (e: Exception) {
+                logger.error("[StatsReporter] gRPC 스트림 에러: ${e.message}", e)
+            }
+        }
+        
+        // 통계 수집 및 전송
         reportingJob = scope.launch {
             try {
                 while (isRunning.get()) {
@@ -76,12 +95,9 @@ class StatsReporter(
                             previousStat = stat
                         }
                         
-                        // 통계가 있는 경우에만 전송
+                        // 통계가 있는 경우에만 전송 (Channel을 통해)
                         if (stat.requestsPerSecond > 0) {
-                            // gRPC streamStats를 통해 전송
-                            reportStub.streamStats(flow {
-                                emit(stat)
-                            })
+                            statsChannel.send(stat)
                             
                             logger.debug(
                                 "[StatsReporter] 통계 전송 완료 - " +
@@ -126,9 +142,7 @@ class StatsReporter(
             if (finalStat.requestsPerSecond > 0) {
                 runBlocking {
                     try {
-                        reportStub.streamStats(flow {
-                            emit(finalStat)
-                        })
+                        statsChannel.send(finalStat)
                         logger.info("[StatsReporter] 최종 통계 전송 완료")
                     } catch (e: Exception) {
                         logger.warn("[StatsReporter] 최종 통계 전송 실패: ${e.message}")
@@ -137,6 +151,11 @@ class StatsReporter(
             }
         } catch (e: Exception) {
             logger.warn("[StatsReporter] 최종 통계 수집 실패: ${e.message}")
+        } finally {
+            // Channel 닫기
+            statsChannel.close()
+            streamingJob?.cancel()
+            streamingJob = null
         }
     }
     
@@ -288,9 +307,4 @@ class StatsReporter(
     }
 }
 
-data class BreakingPointInfo(
-    val users: Int,
-    val status: String,
-    val tpsSaturated: Boolean
-)
 

@@ -1,73 +1,32 @@
 package com.ch.hammerscale.controller.presentation
 
-import com.ch.hammerscale.controller.domain.port.out.TestMetricData
-import com.ch.hammerscale.controller.domain.port.out.TestMetricRepository
+import com.ch.hammerscale.controller.domain.service.TestMetricQueryService
+import com.ch.hammerscale.controller.presentation.dto.ApiResponse
+import com.ch.hammerscale.controller.presentation.dto.TestMetricsResponse
 import kotlinx.coroutines.runBlocking
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
-import java.time.ZoneId
 
 @RestController
 @RequestMapping("/api/test")
 class TestMetricQueryController(
-    private val testMetricRepository: TestMetricRepository
+    private val testMetricQueryService: TestMetricQueryService
 ) {
-
-    @GetMapping("/{id}/metrics")
+    @GetMapping("/{testId}/metrics")
     fun getMetrics(
-        @PathVariable id: String,
+        @PathVariable testId: String,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) startTime: LocalDateTime?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) endTime: LocalDateTime?
-    ): TestMetricsResponse = runBlocking {
-        val startInstant = startTime?.atZone(ZoneId.systemDefault())?.toInstant()
-        val endInstant = endTime?.atZone(ZoneId.systemDefault())?.toInstant()
-
-        val metrics = testMetricRepository.getMetrics(
-            testId = id,
-            startTime = startInstant,
-            endTime = endInstant
+    ): ApiResponse<TestMetricsResponse> = runBlocking {
+        val result = testMetricQueryService.getMetrics(
+            testId = testId,
+            startTime = startTime,
+            endTime = endTime
         )
-
-        TestMetricsResponse(
-            testId = id,
-            count = metrics.size,
-            metrics = metrics.map { it.toResponse() }
+        ApiResponse.success(
+            data = result,
+            message = "Metrics retrieved successfully"
         )
     }
 }
-
-data class TestMetricsResponse(
-    val testId: String,
-    val count: Int,
-    val metrics: List<MetricDataResponse>
-)
-
-data class MetricDataResponse(
-    val timestamp: String,
-    val tps: Int,
-    val avgLatency: Double,
-    val p50Latency: Double,
-    val p95Latency: Double,
-    val p99Latency: Double,
-    val errorCount: Int,
-    val errorRate: Double,
-    val activeUsers: Int,
-    val healthStatus: String
-)
-
-private fun TestMetricData.toResponse(): MetricDataResponse {
-    return MetricDataResponse(
-        timestamp = this.timestamp.toString(),
-        tps = this.tps,
-        avgLatency = this.avgLatency,
-        p50Latency = this.p50Latency,
-        p95Latency = this.p95Latency,
-        p99Latency = this.p99Latency,
-        errorCount = this.errorCount,
-        errorRate = this.errorRate,
-        activeUsers = this.activeUsers,
-        healthStatus = this.healthStatus
-    )
-}
-

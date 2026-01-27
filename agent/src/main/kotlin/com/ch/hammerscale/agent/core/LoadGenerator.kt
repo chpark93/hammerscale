@@ -1,5 +1,6 @@
 package com.ch.hammerscale.agent.core
 
+import com.ch.hammerscale.agent.core.dto.LoadGeneratorStats
 import com.project.common.proto.ReportServiceGrpcKt
 import com.project.common.proto.TestConfig
 import org.slf4j.LoggerFactory
@@ -26,10 +27,10 @@ class LoadGenerator(
         .version(HttpClient.Version.HTTP_1_1)
         .executor(Executors.newVirtualThreadPerTaskExecutor())
         .build()
-
     private val requestCount = LongAdder()
     private val errorCount = LongAdder()
     private val activeUserCount = LongAdder() // 현재 활성 Virtual User 수 추적
+
     private var executorService: ExecutorService? = null
     private var monitoringThread: Thread? = null
     private var statsCollector: WindowedStatsCollector? = null
@@ -140,7 +141,11 @@ class LoadGenerator(
                         try {
                             val threadStartTime = System.currentTimeMillis()
                             val threadEndTime = threadStartTime + (config.durationSeconds * 1000L)
-                            runLoadTest(config, threadEndTime, userIndex)
+                            runLoadTest(
+                                config = config,
+                                endTime = threadEndTime,
+                                userIndex = userIndex
+                            )
                         } finally {
                             activeUserCount.decrement()
                         }
@@ -162,7 +167,11 @@ class LoadGenerator(
                 executorService?.submit {
                     activeUserCount.increment()
                     try {
-                        runLoadTest(config, endTime, userIndex)
+                        runLoadTest(
+                            config = config,
+                            endTime = endTime,
+                            userIndex = userIndex
+                        )
                     } finally {
                         activeUserCount.decrement()
                     }
@@ -194,7 +203,9 @@ class LoadGenerator(
         )
 
         // 통계 집계기 생성
-        statsCollector = WindowedStatsCollector(config.testId)
+        statsCollector = WindowedStatsCollector(
+            testId = config.testId
+        )
 
         // 통계 리포터 생성 및 시작
         stopRequested = false
@@ -336,7 +347,9 @@ class LoadGenerator(
         )
 
         // 통계 집계기 생성
-        statsCollector = WindowedStatsCollector(config.testId)
+        statsCollector = WindowedStatsCollector(
+            testId = config.testId
+        )
 
         // 통계 리포터 생성 및 시작
         stopRequested = false
@@ -470,7 +483,7 @@ class LoadGenerator(
                 
                 logger.info("[SpikeTest] 모든 단계 완료")
                 
-            } catch (e: InterruptedException) {
+            } catch (_: InterruptedException) {
                 logger.warn("[SpikeTest] Spike test interrupted")
                 Thread.currentThread().interrupt()
             } catch (e: Exception) {
@@ -494,7 +507,10 @@ class LoadGenerator(
         endTime: Long,
         userIndex: Int
     ) {
-        val finalUrl = buildUrlWithQueryParams(config.targetUrl, config.queryParamsMap)
+        val finalUrl = buildUrlWithQueryParams(
+            baseUrl = config.targetUrl,
+            queryParams = config.queryParamsMap
+        )
         val uri = URI.create(finalUrl)
         val httpMethod = config.httpMethod.uppercase()
         var consecutiveErrors = 0
@@ -693,7 +709,6 @@ class LoadGenerator(
             monitoringThread?.join(1000)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-            // 정상적인 종료 과정이므로 로그 출력하지 않음
         }
 
         // 통계 집계기 정리
@@ -758,20 +773,20 @@ class LoadGenerator(
         }
 
         when (httpMethod) {
-            "GET" -> builder.GET()
-            "POST" -> {
+            HttpMethodType.GET.name -> builder.GET()
+            HttpMethodType.POST.name -> {
                 val body = config.requestBody.takeIf { it.isNotBlank() } ?: ""
                 builder.POST(HttpRequest.BodyPublishers.ofString(body))
             }
-            "PUT" -> {
+            HttpMethodType.PUT.name -> {
                 val body = config.requestBody.takeIf { it.isNotBlank() } ?: ""
                 builder.PUT(HttpRequest.BodyPublishers.ofString(body))
             }
-            "PATCH" -> {
+            HttpMethodType.PATCH.name -> {
                 val body = config.requestBody.takeIf { it.isNotBlank() } ?: ""
                 builder.method("PATCH", HttpRequest.BodyPublishers.ofString(body))
             }
-            "DELETE" -> {
+            HttpMethodType.DELETE.name -> {
                 builder.DELETE()
             }
             else -> {
@@ -783,9 +798,4 @@ class LoadGenerator(
         return builder.build()
     }
 }
-
-data class LoadGeneratorStats(
-    val requestCount: Long,
-    val errorCount: Long
-)
 

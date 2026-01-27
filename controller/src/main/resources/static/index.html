@@ -403,9 +403,9 @@
         </div>
 
         <div class="tabs">
-            <button class="tab-button active" onclick="switchTab('newTest')">🚀 New Test</button>
-            <button class="tab-button" onclick="switchTab('monitor')">📊 Monitor Test</button>
-            <button class="tab-button" onclick="switchTab('history')">📜 Test History</button>
+            <button class="tab-button active" onclick="switchTab('newTest', this)">🚀 New Test</button>
+            <button class="tab-button" onclick="switchTab('monitor', this)">📊 Monitor Test</button>
+            <button class="tab-button" onclick="switchTab('history', this)">📜 Test History</button>
         </div>
 
         <!-- New Test Tab -->
@@ -578,6 +578,16 @@
                 <div class="test-info-label">Duration</div>
                 <div class="test-info-value" id="duration">0s</div>
             </div>
+        </div>
+
+        <!-- Test Control Buttons -->
+        <div class="form-section" id="testControlButtons" style="display: none; padding: 15px; flex-direction: row; gap: 10px;">
+            <button class="btn btn-secondary" onclick="viewReport()" style="flex: 1;">
+                📊 View Report
+            </button>
+            <button class="btn" onclick="stopTest()" id="stopTestBtn" style="flex: 1; background: #ef4444;">
+                ⏹️ Stop Test
+            </button>
         </div>
 
         <div class="metrics-grid" id="metricsGrid">

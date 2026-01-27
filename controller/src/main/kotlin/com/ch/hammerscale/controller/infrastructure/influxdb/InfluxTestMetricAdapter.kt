@@ -1,6 +1,6 @@
 package com.ch.hammerscale.controller.infrastructure.influxdb
 
-import com.ch.hammerscale.controller.domain.port.out.TestMetricData
+import com.ch.hammerscale.controller.domain.dto.TestMetricData
 import com.ch.hammerscale.controller.domain.port.out.TestMetricRepository
 import com.influxdb.client.domain.WritePrecision
 import com.influxdb.client.kotlin.InfluxDBClientKotlin

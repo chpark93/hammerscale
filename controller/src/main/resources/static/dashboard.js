@@ -128,10 +128,12 @@ function initCharts() {
     });
 }
 
-function switchTab(tabName) {
+function switchTab(tabName, clickedButton) {
     // Update tab buttons
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    if (clickedButton) {
+        clickedButton.classList.add('active');
+    }
 
     // Update tab contents
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -195,15 +197,16 @@ async function startNewTest() {
         
         showAlert(`✅ Test started successfully! Test ID: ${testId}`, 'success');
         
-        // Automatically connect to monitoring
-        setTimeout(() => {
-            connectToTest(testId);
-            switchTab('monitor');
-            document.querySelectorAll('.tab-button').forEach((btn, idx) => {
-                btn.classList.remove('active');
-                if (idx === 1) btn.classList.add('active');
-            });
-        }, 1000);
+        // 즉시 SSE 연결 및 모니터링 시작 (대기 없음!)
+        connectToTest(testId);
+        
+        // Switch to monitor tab
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById('monitor').classList.add('active');
+        document.querySelectorAll('.tab-button').forEach((btn, idx) => {
+            btn.classList.remove('active');
+            if (idx === 1) btn.classList.add('active');
+        });
 
     } catch (error) {
         console.error('Test start error:', error);
@@ -275,7 +278,7 @@ function connectToExistingTest() {
     connectToTest(testId);
 }
 
-function connectToTest(testId) {
+async function connectToTest(testId) {
     if (eventSource) {
         eventSource.close();
     }
@@ -304,9 +307,36 @@ function connectToTest(testId) {
     document.getElementById('chartContainer2').classList.add('active');
     document.getElementById('testIdDisplay').textContent = testId;
     document.getElementById('alertContainer').innerHTML = '';
+    
+    // Show control buttons
+    const controlButtons = document.getElementById('testControlButtons');
+    if (controlButtons) {
+        controlButtons.style.display = 'flex';
+    }
 
     if (!tpsChart) {
         initCharts();
+    }
+
+    // Check if test is already finished
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromReport = urlParams.get('fromReport');
+    
+    if (fromReport === 'true') {
+        try {
+            const response = await fetch(`/api/test/${testId}`);
+            const testData = await response.json();
+            
+            if (testData.status === 'FINISHED') {
+                showAlert(
+                    `📊 Viewing completed test. <a href="/report.html?testId=${testId}" style="color: #667eea; font-weight: bold;">View Full Report →</a>`,
+                    'success'
+                );
+                updateConnectionStatus(false);
+            }
+        } catch (error) {
+            console.error('Failed to check test status:', error);
+        }
     }
 
     eventSource = new EventSource(`/api/dashboard/stream/${testId}`);
@@ -317,23 +347,74 @@ function connectToTest(testId) {
     };
 
     eventSource.addEventListener('metric', (event) => {
+        console.log('📥 metric 이벤트 수신:', event.data);
         const metric = JSON.parse(event.data);
+        console.log('📊 파싱된 메트릭:', metric);
         updateDashboard(metric);
     });
 
     eventSource.addEventListener('testCompleted', (event) => {
         const data = JSON.parse(event.data);
         console.log('Test completed:', data);
-        updateConnectionStatus(false);
         
-        showAlert(
-            `✅ Test completed with status: ${data.status}. <a href="/report.html?testId=${data.testId}" style="color: #667eea; font-weight: bold;">View Report →</a>`,
-            'success'
-        );
+        // SSE 연결 종료
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
         
-        setTimeout(() => {
-            window.location.href = `/report.html?testId=${data.testId}`;
-        }, 3000);
+        // 상태를 "Completed"로 변경
+        updateConnectionStatus(false, true);
+        
+        // Stop 버튼 비활성화
+        const stopBtn = document.getElementById('stopTestBtn');
+        if (stopBtn) {
+            stopBtn.disabled = true;
+            stopBtn.textContent = '⏹️ Test Completed';
+            stopBtn.style.background = '#9ca3af';
+            stopBtn.style.cursor = 'not-allowed';
+        }
+        
+        // Test Info에 최종 상태 표시
+        const testInfoDiv = document.getElementById('testInfo');
+        if (testInfoDiv) {
+            // Duration을 최종값으로 고정
+            const finalDuration = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('duration').textContent = `${finalDuration}s (Completed)`;
+            document.getElementById('duration').style.color = '#10b981';
+            document.getElementById('duration').style.fontWeight = 'bold';
+        }
+        
+        // Check if we came from report page (don't redirect back)
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromReport = urlParams.get('fromReport');
+        
+        if (fromReport === 'true') {
+            showAlert(
+                `✅ Test was completed with status: ${data.status}. This is the historical view.`,
+                'success'
+            );
+        } else {
+            // 자동 리다이렉션 제거 - 사용자가 버튼을 클릭해야 Report로 이동
+            const reportButton = `
+                <div style="margin-top: 10px;">
+                    <a href="/report.html?testId=${data.testId}" 
+                       style="display: inline-block; padding: 12px 30px; background: #667eea; 
+                              color: white; text-decoration: none; border-radius: 10px; 
+                              font-weight: bold; transition: background 0.3s;"
+                       onmouseover="this.style.background='#5568d3'"
+                       onmouseout="this.style.background='#667eea'">
+                        📊 View Detailed Report
+                    </a>
+                </div>
+            `;
+            
+            showAlert(
+                `✅ Test completed with status: ${data.status}!<br/><br/>
+                Dashboard shows final results. Click below for detailed analysis.${reportButton}`,
+                'success'
+            );
+        }
     });
 
     eventSource.onerror = (error) => {
@@ -344,6 +425,8 @@ function connectToTest(testId) {
 }
 
 function updateDashboard(metric) {
+    console.log('🎯 updateDashboard 호출됨!', metric);
+    
     document.getElementById('activeUsers').textContent = metric.activeUsers;
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     document.getElementById('duration').textContent = `${elapsed}s`;
@@ -385,9 +468,11 @@ function updateDashboard(metric) {
     usersChart.update('none');
 }
 
-function updateConnectionStatus(connected) {
+function updateConnectionStatus(connected, completed = false) {
     const statusEl = document.getElementById('connectionStatus');
-    if (connected) {
+    if (completed) {
+        statusEl.innerHTML = '<span class="connected">● Test Completed</span>';
+    } else if (connected) {
         statusEl.innerHTML = '<span class="connected">● Connected</span>';
     } else {
         statusEl.innerHTML = '<span class="disconnected">● Disconnected</span>';
@@ -424,6 +509,62 @@ async function checkSystemHealth() {
         }
     } catch (error) {
         console.error('Health check failed:', error);
+    }
+}
+
+// View Report 버튼
+function viewReport() {
+    if (!currentTestId) {
+        alert('No active test');
+        return;
+    }
+    window.open(`/report.html?testId=${currentTestId}`, '_blank');
+}
+
+// Stop Test 버튼
+async function stopTest() {
+    if (!currentTestId) {
+        alert('No active test');
+        return;
+    }
+
+    if (!confirm('Are you sure you want to stop this test?')) {
+        return;
+    }
+
+    const stopBtn = document.getElementById('stopTestBtn');
+    if (stopBtn) {
+        stopBtn.disabled = true;
+        stopBtn.textContent = '⏹️ Stopping...';
+    }
+
+    try {
+        const response = await fetch(`/api/test/${currentTestId}/stop`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showAlert('✅ Test stopped successfully', 'success');
+            
+            // SSE 연결 종료
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            updateConnectionStatus(false, true);
+        } else {
+            showAlert(`⚠️ ${result.message}`, 'warning');
+        }
+    } catch (error) {
+        showAlert(`❌ Failed to stop test: ${error.message}`, 'critical');
+    } finally {
+        if (stopBtn) {
+            stopBtn.disabled = false;
+            stopBtn.textContent = '⏹️ Stop Test';
+        }
     }
 }
 

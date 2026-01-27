@@ -17,11 +17,13 @@ object TestPlans : Table("test_plans") {
     val headers = text("headers").nullable() // JSON 문자열
     val queryParams = text("query_params").nullable() // JSON 문자열
     val requestBody = text("request_body").nullable()
+
     // Stress Test 전용 필드
     val stressStartUsers = integer("stress_start_users").nullable()
     val stressMaxUsers = integer("stress_max_users").nullable()
     val stressStepDuration = integer("stress_step_duration").nullable()
     val stressStepIncrement = integer("stress_step_increment").nullable()
+
     // Spike Test 전용 필드
     val spikeBaseUsers = integer("spike_base_users").nullable()
     val spikeSpikeUsers = integer("spike_spike_users").nullable()

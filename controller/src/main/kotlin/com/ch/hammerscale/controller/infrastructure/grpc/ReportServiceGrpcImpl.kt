@@ -20,7 +20,7 @@ class ReportServiceGrpcImpl(
     private val logger = LoggerFactory.getLogger(ReportServiceGrpcImpl::class.java)
 
     private companion object {
-        const val BATCH_SIZE = 10
+        const val BATCH_SIZE = 1  // 실시간 처리를 위해 1로 변경
     }
 
     override suspend fun streamStats(

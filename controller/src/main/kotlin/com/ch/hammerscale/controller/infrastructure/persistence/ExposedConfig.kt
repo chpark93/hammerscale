@@ -13,7 +13,9 @@ class ExposedConfig : ApplicationRunner {
 
     private val logger = LoggerFactory.getLogger(ExposedConfig::class.java)
 
-    override fun run(args: ApplicationArguments?) {
+    override fun run(
+        args: ApplicationArguments?
+    ) {
         logger.info("[Exposed] Database 테이블 생성 시작")
 
         transaction {
