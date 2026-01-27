@@ -784,7 +784,7 @@ class LoadGenerator(
             }
             HttpMethodType.PATCH.name -> {
                 val body = config.requestBody.takeIf { it.isNotBlank() } ?: ""
-                builder.method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                builder.method(HttpMethodType.PATCH.name, HttpRequest.BodyPublishers.ofString(body))
             }
             HttpMethodType.DELETE.name -> {
                 builder.DELETE()

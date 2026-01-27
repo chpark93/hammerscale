@@ -21,7 +21,9 @@ class TestStopController(
     fun stopTest(
         @PathVariable testId: String
     ): ApiResponse<StopTestResponse> = runBlocking {
-        val response = testStopService.stopTest(testId)
+        val response = testStopService.stopTest(
+            testId = testId
+        )
         
         if (response.success) {
             ApiResponse.success(
