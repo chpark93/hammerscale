@@ -4,6 +4,11 @@ spring:
     username: root
     password: 1234
     driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""
 
 server:
   port: 8080
@@ -19,4 +24,19 @@ influxdb:
   org: hammerscale
   bucket: metrics
   token: ""  # Token 기반 인증 사용 시 설정 (비어있으면 username/password 사용)
+
+# Hammerscale 서비스 어뷰징 방지 및 인증
+hammerscale:
+  rate-limit:
+    requests-per-minute: 120
+    window-seconds: 60
+  abuse:
+    auto-block-after-violations: 10   # N회 연속 rate limit 초과 시 자동 차단
+    auto-block-duration-minutes: 60  # 자동 차단 유지 시간 (분)
+  jwt:
+    secret: "your-256-bit-secret-key-change-in-production-minimum-32-chars"
+    access-ttl-seconds: 900    # 15분
+    refresh-ttl-seconds: 604800  # 7일
+  admin:
+    secret: ""   # 관리자 회원가입 시 X-Admin-Secret 헤더와 일치해야 함
 

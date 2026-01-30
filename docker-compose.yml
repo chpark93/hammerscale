@@ -48,6 +48,14 @@ services:
     networks:
       - hammerscale-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: hammerscale-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - hammerscale-network
+
 networks:
   hammerscale-network:
     driver: bridge
