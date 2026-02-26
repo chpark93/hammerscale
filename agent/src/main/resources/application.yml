@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 8082
 
 spring:
   application:
@@ -13,5 +13,5 @@ spring:
 grpc:
   controller:
     host: localhost
-    port: 9090  # Controller의 gRPC 서버 포트
+    port: 9090 # Controller의 gRPC 서버 포트
 

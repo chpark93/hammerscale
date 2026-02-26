@@ -54,7 +54,7 @@ class StatsReporter(
         
         logger.info("[StatsReporter] 통계 전송 시작")
         
-        // gRPC 스트림 시작 (한 번만 열고 계속 사용)
+        // 스트림 시작
         streamingJob = scope.launch {
             try {
                 reportStub.streamStats(statsChannel.consumeAsFlow())
@@ -109,7 +109,6 @@ class StatsReporter(
                         }
                     } catch (e: Exception) {
                         logger.error("[StatsReporter] 통계 전송 실패: ${e.message}", e)
-                        // 전송 실패해도 계속 진행
                     }
                 }
             } catch (e: CancellationException) {

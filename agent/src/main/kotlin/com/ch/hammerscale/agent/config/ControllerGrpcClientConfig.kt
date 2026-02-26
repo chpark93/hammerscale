@@ -10,10 +10,10 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class ControllerGrpcClientConfig {
 
-    @Value("\${grpc.controller.host:localhost}")
+    @Value($$"${grpc.controller.host:localhost}")
     private lateinit var controllerHost: String
 
-    @Value("\${grpc.controller.port:9090}")
+    @Value($$"${grpc.controller.port:9090}")
     private var controllerPort: Int = 9090
 
     @Bean

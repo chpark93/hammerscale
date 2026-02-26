@@ -37,15 +37,17 @@ class WindowedStatsCollector(
         
         // 레이턴시 집계
         totalLatency.add(latencyMs)
-        minLatency.updateAndGet { current -> if (current < latencyMs) current else latencyMs }
-        maxLatency.updateAndGet { current -> if (current > latencyMs) current else latencyMs }
+        minLatency.updateAndGet { current ->
+            if (current < latencyMs) current else latencyMs
+        }
+        maxLatency.updateAndGet { current ->
+            if (current > latencyMs) current else latencyMs
+        }
         
-        // 히스토그램에 레이턴시 기록
+        // histogram -> 레이턴시 기록
         try {
             histogram.recordValue(latencyMs * 1000) // ms -> μs
-        } catch (_: Exception) {
-            // 값이 범위를 벗어나면 무시
-        }
+        } catch (_: Exception) {}
     }
 
     /**
@@ -71,14 +73,14 @@ class WindowedStatsCollector(
             0.0
         }
         
-        // 최소/최대 레이턴시가 초기값 -> 0으로 설정
+        // 최소/최대 레이턴시 초기값 -> 0으로 설정
         val minLatencyValue = if (currentMin == Long.MAX_VALUE) 0L else currentMin
         val maxLatencyValue = if (currentMax == Long.MIN_VALUE) 0L else currentMax
         
         // TPS 계산
         val tps = total.toInt()
         
-        // 히스토그램에서 퍼센타일 계산
+        // 히스토그램에서 Percentile 계산
         val oldHistogram = histogram
         // 새 히스토그램으로 교체
         histogram = Histogram(3600000000000L, 3)

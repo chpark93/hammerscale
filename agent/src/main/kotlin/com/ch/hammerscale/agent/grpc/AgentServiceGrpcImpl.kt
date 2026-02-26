@@ -20,7 +20,7 @@ class AgentServiceGrpcImpl(
         request: TestConfig
     ): Ack {
         logger.info(
-            "[Agent] 부하 테스트 시작 요청 수신 - ID: ${request.testId}, URL: ${request.targetUrl}, " +
+            "[Agent] 테스트 시작 요청 수신 - ID: ${request.testId}, URL: ${request.targetUrl}, " +
             "Users: ${request.virtualUsers}, Duration: ${request.durationSeconds}s"
         )
 
@@ -28,7 +28,7 @@ class AgentServiceGrpcImpl(
             try {
                 loadGenerator.start(request)
             } catch (e: Exception) {
-                logger.error("[Agent] 부하 테스트 시작 실패: ${e.message}", e)
+                logger.error("[Agent] 테스트 시작 실패: ${e.message}", e)
             }
         }
 
@@ -41,7 +41,7 @@ class AgentServiceGrpcImpl(
     override suspend fun stopTest(
         request: TestId
     ): Ack {
-        logger.info("[Agent] 부하 테스트 중지 요청 수신 - ID: ${request.id}")
+        logger.info("[Agent] 테스트 중지 요청 수신 - ID: ${request.id}")
 
         try {
             loadGenerator.stop()
@@ -50,7 +50,7 @@ class AgentServiceGrpcImpl(
                 .setMessage("Test stopped successfully")
                 .build()
         } catch (e: Exception) {
-            logger.error("[Agent] 부하 테스트 중지 실패: ${e.message}", e)
+            logger.error("[Agent] 테스트 중지 실패: ${e.message}", e)
             return Ack.newBuilder()
                 .setSuccess(false)
                 .setMessage("Failed to stop test: ${e.message}")

@@ -1,0 +1,10 @@
+server:
+  port: 8083
+
+hammerscale:
+  rate-limit:
+    requests-per-minute: 120
+    window-seconds: 60
+  abuse:
+    auto-block-after-violations: 10
+    auto-block-duration-minutes: 60

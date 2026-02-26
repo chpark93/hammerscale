@@ -1,6 +1,7 @@
 import com.google.protobuf.gradle.id
 
 plugins {
+	id("org.jetbrains.kotlin.jvm")
 	id("com.google.protobuf") version "0.9.6"
 }
 
@@ -65,6 +66,7 @@ sourceSets {
 		}
 		kotlin {
 			srcDirs(
+				"src/main/kotlin",
 				"build/generated/sources/proto/main/kotlin"
 			)
 		}

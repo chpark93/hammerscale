@@ -161,7 +161,6 @@ class LoadGenerator(
             
             logger.info("[LoadGenerator] Ramp-up 시작 - ${config.virtualUsers}명을 ${config.rampUpSeconds}초에 걸쳐 시작합니다.")
         } else {
-            // 즉시 시작
             val endTime = startTime + (config.durationSeconds * 1000L)
             repeat(config.virtualUsers) { userIndex ->
                 executorService?.submit {
@@ -682,7 +681,7 @@ class LoadGenerator(
             return
         }
 
-        logger.info("[LoadGenerator] 부하 테스트 중지 요청")
+        logger.info("[LoadGenerator] 테스트 중지 요청")
 
         isRunning = false
 
@@ -715,7 +714,7 @@ class LoadGenerator(
         statsCollector = null
 
         logger.info(
-            "[LoadGenerator] 부하 테스트 종료 - " +
+            "[LoadGenerator] 테스트 종료 - " +
             "Total Requests: ${requestCount.sum()}, Total Errors: ${errorCount.sum()}"
         )
         
@@ -732,7 +731,7 @@ class LoadGenerator(
                 "한계점: ${breakingPoint.users}명 (상태: ${breakingPoint.status})${saturationInfo}"
             )
         } else {
-            logger.info("📊 [테스트 요약] Breaking Point가 감지되지 않았습니다. 시스템이 안정적으로 부하를 처리했습니다.")
+            logger.info("📊 [테스트 요약] Breaking Point가 감지되지 않았습니다. 시스템이 안정적으로 처리했습니다.")
         }
     }
 

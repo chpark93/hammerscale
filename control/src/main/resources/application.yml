@@ -1,0 +1,26 @@
+server:
+  port: 8081
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.jdbc.JdbcRepositoriesAutoConfiguration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hammerscale
+    username: root
+    password: 1234
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      initialization-fail-timeout: -1
+
+grpc:
+  server:
+    port: 9090 # Agent의 StatsReporter가 연결할 포트
+
+influxdb:
+  url: http://localhost:8086
+  username: root
+  password: password1234
+  org: hammerscale
+  bucket: metrics
+  token: ""

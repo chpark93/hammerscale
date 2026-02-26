@@ -8,5 +8,7 @@ pluginManagement {
 rootProject.name = "hammerscale"
 
 include("common")
-include("controller")
+include("control")
+include("auth")
+include("admin")
 include("agent")
